@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VR 展開図 - 立方体 + 正八面体（八面体をさらに左へ）</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
+  <script>
+    /* cube-unfold (既存) */
+    AFRAME.registerComponent('cube-unfold', {
+      schema: {
+        isUnfolded: {type: 'boolean', default: false},
+        patternIndex: {type: 'int', default: 0}
+      },
+      init: function() {
+        this.faces = [];
+        this.thickness = 0.08;
+        this.faceSize = 1;
+        this.baseFace = null;
+        this.isAnimating = false;
+        this.setupFaces();
+        this.unfoldPatterns = [
+          { name: '十字型', positions: [
+              {name:'bottom', pos:{x:0,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'front', pos:{x:0,y:1,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'left', pos:{x:-1,y:1,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'right', pos:{x:1,y:1,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'back', pos:{x:0,y:2,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'top', pos:{x:0,y:3,z:0}, rot:{x:0,y:0,z:0}}
+            ]},
+          { name: 'T字型', positions: [
+              {name:'bottom', pos:{x:0,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'front', pos:{x:1,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'right', pos:{x:2,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'back', pos:{x:3,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'left', pos:{x:1,y:1,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'top', pos:{x:2,y:1,z:0}, rot:{x:0,y:0,z:0}}
+            ]},
+          { name: 'L字型', positions: [
+              {name:'bottom', pos:{x:0,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'front', pos:{x:1,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'left', pos:{x:0,y:1,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'right', pos:{x:1,y:1,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'back', pos:{x:0,y:2,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'top', pos:{x:1,y:2,z:0}, rot:{x:0,y:0,z:0}}
+            ]},
+          { name: '階段型', positions: [
+              {name:'bottom', pos:{x:0,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'front', pos:{x:1,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'left', pos:{x:1,y:1,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'right', pos:{x:2,y:1,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'back', pos:{x:2,y:2,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'top', pos:{x:3,y:2,z:0}, rot:{x:0,y:0,z:0}}
+            ]},
+          { name: 'Z字型', positions: [
+              {name:'bottom', pos:{x:0,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'front', pos:{x:1,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'left', pos:{x:1,y:1,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'right', pos:{x:2,y:1,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'back', pos:{x:2,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'top', pos:{x:3,y:0,z:0}, rot:{x:0,y:0,z:0}}
+            ]},
+          { name: '一直線型', positions: [
+              {name:'bottom', pos:{x:0,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'front', pos:{x:1,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'right', pos:{x:2,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'back', pos:{x:3,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'left', pos:{x:4,y:0,z:0}, rot:{x:0,y:0,z:0}},
+              {name:'top', pos:{x:5,y:0,z:0}, rot:{x:0,y:0,z:0}}
+            ]}
+        ];
+      },
+      setupFaces: function() {
+        const el = this.el;
+        const thickness = this.thickness;
+        const offset = 0.5 + thickness / 2;
+        const faceConfigs = [
+          {name: 'front', pos: [0, 0, offset], rot: [0, 0, 0], color: '#FF6B6B'},
+          {name: 'back', pos: [0, 0, -offset], rot: [0, 180, 0], color: '#4ECDC4'},
+          {name: 'right', pos: [offset, 0, 0], rot: [0, 90, 0], color: '#45B7D1'},
+          {name: 'left', pos: [-offset, 0, 0], rot: [0, -90, 0], color: '#FFA07A'},
+          {name: 'top', pos: [0, offset, 0], rot: [-90, 0, 0], color: '#98D8C8'},
+          {name: 'bottom', pos: [0, -offset, 0], rot: [90, 0, 0], color: '#F7DC6F'}
+        ];
+        faceConfigs.forEach((config) => {
+          const faceEl = document.createElement('a-box');
+          faceEl.setAttribute('width', this.faceSize);
+          faceEl.setAttribute('height', this.faceSize);
+          faceEl.setAttribute('depth', thickness);
+          faceEl.setAttribute('color', config.color);
+          faceEl.setAttribute('position', config.pos.join(' '));
+          faceEl.setAttribute('rotation', config.rot.join(' '));
+          faceEl.setAttribute('data-face-name', config.name);
+          if (config.name === 'bottom') {
+            faceEl.classList.add('grabbable');
+            this.baseFace = faceEl;
+          }
+          const text = document.createElement('a-text');
+          text.setAttribute('value', config.name);
+          text.setAttribute('align', 'center');
+          text.setAttribute('position', '0 0 ' + (thickness/2 + 0.01));
+          text.setAttribute('scale', '0.4 0.4 0.4');
+          text.setAttribute('color', '#000');
+          faceEl.appendChild(text);
+          el.appendChild(faceEl);
+          this.faces.push({
+            el: faceEl,
+            name: config.name,
+            foldedPos: config.pos,
+            foldedRot: config.rot
+          });
+        });
+      },
+      toggle: function() {
+        if (this.isAnimating) return;
+        this.data.isUnfolded = !this.data.isUnfolded;
+        this.animate();
+      },
+      changePattern: function(index) {
+        if (this.isAnimating) return;
+        this.data.patternIndex = index;
+        if (this.data.isUnfolded) this.animate();
+      },
+      animate: function() {
+        this.isAnimating = true;
+        const duration = 1500;
+        const pattern = this.unfoldPatterns[this.data.patternIndex];
+        this.faces.forEach((face) => {
+          let targetPos, targetRot;
+          if (this.data.isUnfolded) {
+            const u = pattern.positions.find(f => f.name === face.name);
+            targetPos = u.pos;
+            targetRot = u.rot;
+          } else {
+            targetPos = {x: face.foldedPos[0], y: face.foldedPos[1], z: face.foldedPos[2]};
+            targetRot = {x: face.foldedRot[0], y: face.foldedRot[1], z: face.foldedRot[2]};
+          }
+          face.el.setAttribute('animation__position', {
+            property: 'position',
+            to: `${targetPos.x} ${targetPos.y} ${targetPos.z}`,
+            dur: duration,
+            easing: 'easeInOutQuad'
+          });
+          face.el.setAttribute('animation__rotation', {
+            property: 'rotation',
+            to: `${targetRot.x} ${targetRot.y} ${targetRot.z}`,
+            dur: duration,
+            easing: 'easeInOutQuad'
+          });
+        });
+        setTimeout(() => { this.isAnimating = false; }, duration);
+      }
+    });
+
+    /* octa-unfold (正八面体) */
+    AFRAME.registerComponent('octa-unfold', {
+      schema: {
+        radius: {type: 'number', default: 0.6},
+        isUnfolded: {type: 'boolean', default: false},
+        patternIndex: {type: 'int', default: 0}
+      },
+      init: function() {
+        this.faces = [];
+        this.isAnimating = false;
+        this.buildOctaFaces();
+        this.unfoldPatterns = [
+          { name: '扇形 (fan)', positions: this.generateRadialPositions(0.9, 8) },
+          { name: '一直線 (line)', positions: this.generateLinePositions(0.9, 8) },
+          { name: '四つずつ (two-pairs)', positions: this.generateTwoPairsPositions(0.9) }
+        ];
+      },
+      buildOctaFaces: function() {
+        const r = this.data.radius;
+        const verts = [
+          [ r, 0, 0],
+          [-r, 0, 0],
+          [0,  r, 0],
+          [0, -r, 0],
+          [0, 0,  r],
+          [0, 0, -r]
+        ];
+        const facesIdx = [
+          [4,0,2],[4,2,1],[4,1,3],[4,3,0],
+          [5,2,0],[5,1,2],[5,3,1],[5,0,3]
+        ];
+        facesIdx.forEach((triIdx, i) => {
+          const A = new THREE.Vector3(...verts[triIdx[0]]);
+          const B = new THREE.Vector3(...verts[triIdx[1]]);
+          const C = new THREE.Vector3(...verts[triIdx[2]]);
+          const centroid = new THREE.Vector3().addVectors(A, B).add(C).multiplyScalar(1/3);
+          const vA = A.clone().sub(centroid);
+          const vB = B.clone().sub(centroid);
+          const vC = C.clone().sub(centroid);
+          const geometry = new THREE.BufferGeometry();
+          const positions = new Float32Array([
+            vA.x, vA.y, vA.z,
+            vB.x, vB.y, vB.z,
+            vC.x, vC.y, vC.z
+          ]);
+          geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+          geometry.computeVertexNormals();
+          const material = new THREE.MeshStandardMaterial({color: this.pickColor(i), side: THREE.DoubleSide, metalness:0.2, roughness:0.5});
+          const mesh = new THREE.Mesh(geometry, material);
+          const triEl = document.createElement('a-entity');
+          triEl.setObject3D('mesh', mesh);
+          triEl.object3D.position.copy(centroid);
+          triEl.setAttribute('data-face-name', 'f' + i);
+          triEl.classList.add('grabbable');
+          const label = document.createElement('a-text');
+          label.setAttribute('value', 'f' + i);
+          label.setAttribute('align', 'center');
+          label.setAttribute('position', '0 0 0.02');
+          label.setAttribute('scale', '0.3 0.3 0.3');
+          label.setAttribute('color', '#000');
+          triEl.appendChild(label);
+          this.el.appendChild(triEl);
+          this.faces.push({
+            el: triEl,
+            name: 'f' + i,
+            foldedPos: {x: centroid.x, y: centroid.y, z: centroid.z},
+            foldedRot: {x:0, y:0, z:0}
+          });
+        });
+      },
+      pickColor: function(i) {
+        const palette = ['#E74C3C','#E67E22','#F1C40F','#2ECC71','#1ABC9C','#3498DB','#9B59B6','#34495E'];
+        return palette[i % palette.length];
+      },
+      generateRadialPositions: function(radius, count) {
+        const arr = [];
+        for (let i=0;i<count;i++) {
+          const a = (i/count) * Math.PI * 2;
+          arr.push({name: 'f' + i, pos: {x: Math.cos(a)*radius, y: Math.sin(a)*radius, z: 0}, rot: {x:0,y:0,z:0}});
+        }
+        return arr;
+      },
+      generateLinePositions: function(spacing, count) {
+        const arr = [];
+        for (let i=0;i<count;i++) {
+          arr.push({name: 'f' + i, pos: {x: (i - (count-1)/2) * spacing, y:0, z:0}, rot:{x:0,y:0,z:0}});
+        }
+        return arr;
+      },
+      generateTwoPairsPositions: function(offset) {
+        const arr = [];
+        for (let i=0;i<8;i++) {
+          const side = i<4 ? -1 : 1;
+          const idx = i%4;
+          arr.push({name:'f'+i, pos:{x: side * (0.6 + idx*0.2), y: (idx-1.5)*0.35, z:0}, rot:{x:0,y:0,z:0}});
+        }
+        return arr;
+      },
+      toggle: function() {
+        if (this.isAnimating) return;
+        this.data.isUnfolded = !this.data.isUnfolded;
+        this.animate();
+      },
+      changePattern: function(index) {
+        if (this.isAnimating) return;
+        this.data.patternIndex = index;
+        if (this.data.isUnfolded) this.animate();
+      },
+      animate: function() {
+        this.isAnimating = true;
+        const duration = 1400;
+        const pattern = this.unfoldPatterns[this.data.patternIndex];
+        this.faces.forEach((face) => {
+          let targetPos, targetRot;
+          if (this.data.isUnfolded) {
+            const u = pattern.positions.find(p => p.name === face.name);
+            if (u) { targetPos = u.pos; targetRot = u.rot; }
+            else { targetPos = face.foldedPos; targetRot = face.foldedRot; }
+          } else {
+            targetPos = face.foldedPos; targetRot = face.foldedRot;
+          }
+          face.el.setAttribute('animation__position', {
+            property: 'position',
+            to: `${targetPos.x} ${targetPos.y} ${targetPos.z}`,
+            dur: duration,
+            easing: 'easeInOutQuad'
+          });
+          face.el.setAttribute('animation__rotation', {
+            property: 'rotation',
+            to: `${targetRot.x} ${targetRot.y} ${targetRot.z}`,
+            dur: duration,
+            easing: 'easeInOutQuad'
+          });
+        });
+        setTimeout(() => { this.isAnimating = false; }, duration);
+      }
+    });
+
+    /* grabbable-object（汎用掴み）*/
+    AFRAME.registerComponent('grabbable-object', {
+      init: function() {
+        this.grabbed = false;
+        this.grabber = null;
+        this.initialGrabberWorldPos = new THREE.Vector3();
+        this.initialObjectWorldPos = new THREE.Vector3();
+        this.tempVec = new THREE.Vector3();
+        const scene = this.el.sceneEl;
+        this.leftHand = scene.querySelector('#leftHand');
+        this.rightHand = scene.querySelector('#rightHand');
+
+        const tryGrabFromController = (controller) => {
+          const rc = controller.components && controller.components.raycaster;
+          if (!rc || !rc.intersectedEls) return false;
+          return rc.intersectedEls.some((iEl) => this.el.contains(iEl));
+        };
+
+        if (this.leftHand) {
+          this._leftGripDown = () => {
+            if (tryGrabFromController(this.leftHand)) {
+              this.grabbed = true;
+              this.grabber = this.leftHand;
+              this.grabber.object3D.getWorldPosition(this.initialGrabberWorldPos);
+              this.el.object3D.getWorldPosition(this.initialObjectWorldPos);
+            }
+          };
+          this._leftGripUp = () => {
+            if (this.grabber === this.leftHand) { this.grabbed = false; this.grabber = null; }
+          };
+          this.leftHand.addEventListener('gripdown', this._leftGripDown);
+          this.leftHand.addEventListener('gripup', this._leftGripUp);
+        }
+        if (this.rightHand) {
+          this._rightGripDown = () => {
+            if (tryGrabFromController(this.rightHand)) {
+              this.grabbed = true;
+              this.grabber = this.rightHand;
+              this.grabber.object3D.getWorldPosition(this.initialGrabberWorldPos);
+              this.el.object3D.getWorldPosition(this.initialObjectWorldPos);
+            }
+          };
+          this._rightGripUp = () => {
+            if (this.grabber === this.rightHand) { this.grabbed = false; this.grabber = null; }
+          };
+          this.rightHand.addEventListener('gripdown', this._rightGripDown);
+          this.rightHand.addEventListener('gripup', this._rightGripUp);
+        }
+
+        this.el.addEventListener('mousedown', (evt) => {
+          if (evt.target && this.el.contains(evt.target)) {
+            this.grabbed = true;
+            const grabber = evt.detail && evt.detail.cursorEl ? evt.detail.cursorEl.parentEl : null;
+            if (grabber) {
+              this.grabber = grabber;
+              this.grabber.object3D.getWorldPosition(this.initialGrabberWorldPos);
+              this.el.object3D.getWorldPosition(this.initialObjectWorldPos);
+            }
+          }
+        });
+        window.addEventListener('mouseup', () => { this.grabbed = false; this.grabber = null; });
+      },
+      tick: function() {
+        if (!this.grabbed || !this.grabber) return;
+        this.grabber.object3D.getWorldPosition(this.tempVec);
+        const delta = this.tempVec.clone().sub(this.initialGrabberWorldPos);
+        const newWorldPos = this.initialObjectWorldPos.clone().add(delta);
+        const parent = this.el.object3D.parent;
+        if (parent) parent.worldToLocal(newWorldPos);
+        this.el.object3D.position.copy(newWorldPos);
+      },
+      remove: function() {
+        const scene = this.el.sceneEl;
+        if (!scene) return;
+        const leftHand = scene.querySelector('#leftHand');
+        const rightHand = scene.querySelector('#rightHand');
+        if (leftHand && this._leftGripDown) leftHand.removeEventListener('gripdown', this._leftGripDown);
+        if (leftHand && this._leftGripUp) leftHand.removeEventListener('gripup', this._leftGripUp);
+        if (rightHand && this._rightGripDown) rightHand.removeEventListener('gripdown', this._rightGripDown);
+        if (rightHand && this._rightGripUp) rightHand.removeEventListener('gripup', this._rightGripUp);
+      }
+    });
+
+    /* clickable-button (拡張) */
+    AFRAME.registerComponent('clickable-button', {
+      schema: { action: {type: 'string', default: 'toggle'} },
+      init: function() {
+        const el = this.el;
+        el.classList.add('clickable');
+        el.addEventListener('mouseenter', () => el.setAttribute('scale','1.06 1.06 1.06'));
+        el.addEventListener('mouseleave', () => el.setAttribute('scale','1 1 1'));
+        el.addEventListener('click', () => this.handleClick());
+        const scene = this.el.sceneEl;
+        const leftHand = scene.querySelector('#leftHand');
+        const rightHand = scene.querySelector('#rightHand');
+        const tryHandleFromController = (controller) => {
+          const rc = controller.components && controller.components.raycaster;
+          if (!rc || !rc.intersectedEls) return false;
+          return rc.intersectedEls.includes(el);
+        };
+        if (leftHand) {
+          this._leftTrigger = () => { if (tryHandleFromController(leftHand)) this.handleClick(); };
+          leftHand.addEventListener('triggerdown', this._leftTrigger);
+        }
+        if (rightHand) {
+          this._rightTrigger = () => { if (tryHandleFromController(rightHand)) this.handleClick(); };
+          rightHand.addEventListener('triggerdown', this._rightTrigger);
+        }
+        el.addEventListener('triggerdown', () => this.handleClick());
+      },
+      handleClick: function() {
+        const action = this.data.action;
+        if (action === 'reset' || action === 'reset-cube') {
+          const cube = document.querySelector('#cube');
+          if (cube && cube.components['cube-unfold'] && cube.components['cube-unfold'].data.isUnfolded) {
+            cube.components['cube-unfold'].toggle();
+          }
+          return;
+        }
+        if (action === 'reset-oct') {
+          const oct = document.querySelector('#octa');
+          if (oct && oct.components['octa-unfold'] && oct.components['octa-unfold'].data.isUnfolded) {
+            oct.components['octa-unfold'].toggle();
+          }
+          return;
+        }
+        if (action.indexOf(':') > -1) {
+          const parts = action.split(':');
+          const target = parts[0];
+          const idx = parseInt(parts[1]);
+          if (target === 'cube') {
+            const cube = document.querySelector('#cube');
+            if (!cube || !cube.components['cube-unfold']) return;
+            cube.components['cube-unfold'].changePattern(idx);
+            const info = document.querySelector('#pattern-info');
+            if (info) info.setAttribute('value', '現在: ' + cube.components['cube-unfold'].unfoldPatterns[idx].name);
+            if (!cube.components['cube-unfold'].data.isUnfolded) cube.components['cube-unfold'].toggle();
+            else cube.components['cube-unfold'].animate();
+          } else if (target === 'oct') {
+            const oct = document.querySelector('#octa');
+            if (!oct || !oct.components['octa-unfold']) return;
+            oct.components['octa-unfold'].changePattern(idx);
+            const info = document.querySelector('#pattern-info-oct');
+            if (info) info.setAttribute('value', '現在(八面体): ' + oct.components['octa-unfold'].unfoldPatterns[idx].name);
+            if (!oct.components['octa-unfold'].data.isUnfolded) oct.components['octa-unfold'].toggle();
+            else oct.components['octa-unfold'].animate();
+          }
+        }
+      }
+    });
+
+    /* thumbstick-locomotion */
+    AFRAME.registerComponent('thumbstick-locomotion', {
+      init: function() { this.rig = document.querySelector('#rig'); this.speed = 0.1; },
+      tick: function() {
+        const el = this.el;
+        const gamepad = el.components['oculus-touch-controls'];
+        if (gamepad && gamepad.controller) {
+          const axes = gamepad.controller.gamepad.axes;
+          if (axes && axes.length >= 2) {
+            const x = axes[0], y = axes[1];
+            if (Math.abs(x) > 0.1 || Math.abs(y) > 0.1) {
+              const camera = document.querySelector('#camera');
+              const rotation = camera.object3D.rotation;
+              const direction = new THREE.Vector3();
+              direction.x = x * Math.cos(rotation.y) + y * Math.sin(rotation.y);
+              direction.z = x * Math.sin(rotation.y) - y * Math.cos(rotation.y);
+              const position = this.rig.object3D.position;
+              position.x += direction.x * this.speed;
+              position.z += direction.z * this.speed;
+            }
+          }
+        }
+      }
+    });
+  </script>
+</head>
+<body>
+  <a-scene>
+    <!-- rig, camera, controllers -->
+    <a-entity id="rig" position="0 1.6 5">
+      <a-entity id="camera" camera look-controls wasd-controls>
+        <a-cursor color="#00FF00" fuse="false" raycaster="objects: .clickable, .grabbable"></a-cursor>
+      </a-entity>
+
+      <a-entity id="leftHand" oculus-touch-controls="hand: left"
+                raycaster="objects: .clickable, .grabbable; lineColor: red; lineOpacity: 0.5"
+                thumbstick-locomotion></a-entity>
+
+      <a-entity id="rightHand" oculus-touch-controls="hand: right"
+                raycaster="objects: .clickable, .grabbable; lineColor: blue; lineOpacity: 0.5"
+                laser-controls></a-entity>
+    </a-entity>
+
+    <!-- 立方体（中央） -->
+    <a-entity id="cube" position="0 1.5 -2" cube-unfold grabbable-object></a-entity>
+
+    <!-- 正八面体をさらに左へ配置（視線を左に向けないと見えないくらい） -->
+    <!-- octa を x = -8.4 に、コントロールパネルをさらに左 x = -9.2 に配置 -->
+    <a-entity id="octa" position="-8.4 1.4 -2" rotation="0 20 0" octa-unfold grabbable-object></a-entity>
+
+    <!-- 立方体用コントロール（右側のパネル、元の位置） -->
+    <a-entity id="control-panel-cube" position="-2.8 1.5 -2">
+      <a-plane width="2.2" height="2.5" color="#2C3E50" opacity="0.95"></a-plane>
+      <a-text value="展開図コントロール（立方体）" position="0 1 0.05" align="center" width="2" color="#ECF0F1"></a-text>
+
+      <a-box class="clickable" position="0 0.6 0.1" width="1.8" height="0.4" depth="0.15" color="#27AE60" clickable-button="action: reset-cube">
+        <a-text value="戻る" align="center" position="0 0 0.08" width="2.5" color="#FFF"></a-text>
+      </a-box>
+
+      <a-text value="--- 展開パターン ---" position="0 0.15 0.05" align="center" width="2" color="#F39C12"></a-text>
+
+      <a-box class="clickable" position="-0.55 -0.2 0.1" width="0.8" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: cube:0">
+        <a-text value="① 十字型" align="center" position="0 0 0.07" width="0.7" color="#FFF"></a-text>
+      </a-box>
+      <a-box class="clickable" position="0.55 -0.2 0.1" width="0.8" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: cube:1">
+        <a-text value="② T字型" align="center" position="0 0 0.07" width="0.7" color="#FFF"></a-text>
+      </a-box>
+      <a-box class="clickable" position="-0.55 -0.6 0.1" width="0.8" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: cube:2">
+        <a-text value="③ L字型" align="center" position="0 0 0.07" width="0.7" color="#FFF"></a-text>
+      </a-box>
+      <a-box class="clickable" position="0.55 -0.6 0.1" width="0.8" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: cube:3">
+        <a-text value="④ 階段型" align="center" position="0 0 0.07" width="0.7" color="#FFF"></a-text>
+      </a-box>
+      <a-box class="clickable" position="-0.55 -1.0 0.1" width="0.8" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: cube:4">
+        <a-text value="⑤ Z字型" align="center" position="0 0 0.07" width="0.7" color="#FFF"></a-text>
+      </a-box>
+      <a-box class="clickable" position="0.55 -1.0 0.1" width="0.8" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: cube:5">
+        <a-text value="⑥ 一直線" align="center" position="0 0 0.07" width="0.7" color="#FFF"></a-text>
+      </a-box>
+    </a-entity>
+
+    <!-- 八面体用コントロール（さらに左、八面体と重ならないように配置） -->
+    <a-entity id="control-panel-oct" position="-9.2 1.5 -2">
+      <a-plane width="1.6" height="1.6" color="#1F3A93" opacity="0.95"></a-plane>
+      <a-text value="八面体コントロール" position="0 0.6 0.05" align="center" width="1.4" color="#ECF0F1"></a-text>
+
+      <a-box class="clickable" position="0 0.25 0.1" width="1.3" height="0.32" depth="0.12" color="#27AE60" clickable-button="action: reset-oct">
+        <a-text value="戻る" align="center" position="0 0 0.08" width="2.0" color="#FFF"></a-text>
+      </a-box>
+
+      <a-text value="--- パターン ---" position="0 -0.1 0.05" align="center" width="1.4" color="#F39C12"></a-text>
+
+      <a-box class="clickable" position="-0.35 -0.5 0.1" width="0.6" height="0.28" depth="0.12" color="#3498DB" clickable-button="action: oct:0">
+        <a-text value="扇形" align="center" position="0 0 0.07" width="1.0" color="#FFF"></a-text>
+      </a-box>
+      <a-box class="clickable" position="0.35 -0.5 0.1" width="0.6" height="0.28" depth="0.12" color="#3498DB" clickable-button="action: oct:1">
+        <a-text value="一直線" align="center" position="0 0 0.07" width="1.0" color="#FFF"></a-text>
+      </a-box>
+      <a-box class="clickable" position="0 -0.9 0.1" width="1.2" height="0.28" depth="0.12" color="#3498DB" clickable-button="action: oct:2">
+        <a-text value="二組表示" align="center" position="0 0 0.07" width="1.4" color="#FFF"></a-text>
+      </a-box>
+    </a-entity>
+
+    <!-- 情報表示（八面体用の info も左へ） -->
+    <a-text id="pattern-info" value="現在: 十字型" position="0 2.5 -2" align="center" width="2" color="#F39C12"></a-text>
+    <a-text id="pattern-info-oct" value="現在(八面体): 扇形" position="-8.4 2.5 -2" align="center" width="2" color="#F39C12"></a-text>
+
+    <!-- 説明 -->
+    <a-text value="左スティック: 移動 / グリップ: 物体を掴む\nトリガー: パネル操作" position="0 2.9 -2" align="center" width="3.5" color="#ECF0F1"></a-text>
+
+    <!-- 環境 -->
+    <a-plane position="0 0 0" rotation="-90 0 0" width="30" height="30" color="#34495E"></a-plane>
+    <a-sky color="#1A1A2E"></a-sky>
+
+    <!-- ライト -->
+    <a-light type="ambient" color="#999"></a-light>
+    <a-light type="directional" color="#FFF" intensity="0.7" position="-1 2 1"></a-light>
+  </a-scene>
+</body>
+</html>
