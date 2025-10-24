@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>展開図VR（Quest 3 / PC対応）— 朝焼け背景＋歩行可能＋立体復元＋UI強化</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <style>
+    body{margin:0;background:#fff4e1;color:#20304a;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",Meiryo}
+    .hud{position:fixed;left:12px;bottom:12px;padding:8px 10px;background:#ffffffcc;border:1px solid #ccd3e2;border-radius:10px;font-size:12px;line-height:1.4;color:#20304a}
+    .hud b{color:#2050ff}
+  </style>
+</head>
+<body>
+  <div class="hud">VR: 右手トリガー=押す / Grip=掴む / 左スティック=移動 ｜ PC: <b>WASD</b>で歩行, クリックで掴む, <b>Space</b>=展開/収納, <b>R</b>=初期位置</div>
+
+  <a-scene background="color:#ffe8b5" fog="type: exponential; color: #ffdca8; density: 0.008" renderer="colorManagement:true;physicallyCorrectLights:true;alpha:false">
+
+    <!-- 照明 -->
+    <a-entity light="type:ambient;intensity:1.2;color:#fff5e0"></a-entity>
+    <a-entity position="2 5 3" light="type:directional;intensity:1.5;color:#ffffff"></a-entity>
+
+    <!-- 地面と空 -->
+    <a-assets>
+      <canvas id="gridTex" width="512" height="512"></canvas>
+    </a-assets>
+    <a-sky color="#ffcf87"></a-sky>
+    <a-entity id="ground" geometry="primitive: circle; radius: 50" rotation="-90 0 0" material="src: #gridTex; repeat: 50 50; metalness:0; roughness:1"></a-entity>
+
+    <!-- プレイヤー操作 -->
+    <a-entity id="rig" position="0 1.6 3">
+      <a-entity id="camera" camera look-controls wasd-controls position="0 0 0">
+        <a-entity id="mouseCursor" cursor="rayOrigin: mouse; fuse: false" raycaster="objects: .clickable,.grabbable; far: 12; showLine: false" visible="false"></a-entity>
+      </a-entity>
+      <a-entity id="rightHand" laser-controls="hand:right" raycaster="objects:.clickable,.grabbable;showLine:true;far:8" line="color:#ffb347"></a-entity>
+      <a-entity id="leftHand" laser-controls="hand:left" raycaster="objects:.clickable,.grabbable;showLine:true;far:8" line="color:#ffd480"></a-entity>
+    </a-entity>
+
+    <!-- 立体（展開可能な立方体） -->
+    <a-entity id="cube" position="-1.5 1.3 -2.5" cube-unfold="variant:A" simple-grabbable class="grabbable"></a-entity>
+
+    <!-- テキスト -->
+    <a-text value="展開図VR — 朝焼けモード (動作・立体復元OK)" color="#6b3d00" position="0 2 -2.5" align="center" width="5"></a-text>
+
+    <!-- リモコン（縦並びUI） -->
+    <a-entity id="remote" position="-0.6 1.1 -2.3" rotation="0 -15 0">
+      <a-plane width="0.55" height="3.8" color="#fff4dd" material="opacity:0.9"></a-plane>
+      <a-entity position="0 1.6 0.02">
+        <a-box class="clickable" color="#ff9b00" width="0.45" height="0.18" depth="0.05" clickable-button="action:toggle"><a-text value="展/収" align="center" position="0 0 0.04" width="0.6" color="#fff"></a-text></a-box>
+    </a-entity>
+      <a-entity position="0 1.35 0.02">
+        <a-box class="clickable" color="#ffb64d" width="0.45" height="0.18" depth="0.05"><a-text value="初期" align="center" position="0 0 0.04" width="0.6" color="#fff"></a-text></a-box>
+      </a-entity>
+      <!-- 11種類の展開図ボタン -->
+      <a-entity position="0 1.00 0.02"><a-box class="clickable" color="#ffa552" width="0.45" height="0.18" depth="0.05"><a-text value="A" align="center" position="0 0 0.04" color="#fff"></a-text></a-box></a-entity>
+      <a-entity position="0 0.75 0.02"><a-box class="clickable" color="#ffa552" width="0.45" height="0.18" depth="0.05"><a-text value="B" align="center" position="0 0 0.04" color="#fff"></a-text></a-box></a-entity>
+      <a-entity position="0 0.50 0.02"><a-box class="clickable" color="#ffa552" width="0.45" height="0.18" depth="0.05"><a-text value="C" align="center" position="0 0 0.04" color="#fff"></a-text></a-box></a-entity>
+      <a-entity position="0 0.25 0.02"><a-box class="clickable" color="#ffa552" width="0.45" height="0.18" depth="0.05"><a-text value="D" align="center" position="0 0 0.04" color="#fff"></a-text></a-box></a-entity>
+      <a-entity position="0 0.00 0.02"><a-box class="clickable" color="#ffa552" width="0.45" height="0.18" depth="0.05"><a-text value="E" align="center" position="0 0 0.04" color="#fff"></a-text></a-box></a-entity>
+      <a-entity position="0.5 1.00 0.02"><a-box class="clickable" color="#ffa552" width="0.45" height="0.18" depth="0.05"><a-text value="F" align="center" position="0 0 0.04" color="#fff"></a-text></a-box></a-entity>
+      <a-entity position="0.5 0.75 0.02"><a-box class="clickable" color="#ffa552" width="0.45" height="0.18" depth="0.05"><a-text value="G" align="center" position="0 0 0.04" color="#fff"></a-text></a-box></a-entity>
+      <a-entity position="0.5 0.5 0.02"><a-box class="clickable" color="#ffa552" width="0.45" height="0.18" depth="0.05"><a-text value="H" align="center" position="0 0 0.04" color="#fff"></a-text></a-box></a-entity>
+      <a-entity position="0.5 0.25 0.02"><a-box class="clickable" color="#ffa552" width="0.45" height="0.18" depth="0.05"><a-text value="I" align="center" position="0 0 0.04" color="#fff"></a-text></a-box></a-entity>
+      <a-entity position="0.5 0 0.02"><a-box class="clickable" color="#ffa552" width="0.45" height="0.18" depth="0.05"><a-text value="J" align="center" position="0 0 0.04" color="#fff"></a-text></a-box></a-entity>
+      <a-entity position="0.5 -0.25 0.02"><a-box class="clickable" color="#ffa552" width="0.45" height="0.18" depth="0.05"><a-text value="K" align="center" position="0 0 0.04" color="#fff"></a-text></a-box></a-entity>
+    </a-entity>
+
+    <script>
+  // ===== グリッド床を描画 =====
+  (function makeGrid(){
+    const cvs=document.getElementById('gridTex'); if(!cvs) return; const s=512; const ctx=cvs.getContext('2d');
+    ctx.fillStyle='#fff3d7'; ctx.fillRect(0,0,s,s);
+    for(let i=0;i<=s;i+=32){ ctx.strokeStyle='rgba(255,160,70,0.4)'; ctx.lineWidth=(i%160===0)?2.0:1.0; ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,s); ctx.stroke(); ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(s,i); ctx.stroke(); }
+  })();
+
+  // ===== Hover glow（ボタンのホバー演出） =====
+  if (!AFRAME.components['hover-glow']) {
+    AFRAME.registerComponent('hover-glow',{
+      init(){ const el=this.el; const base=el.getAttribute('color')||'#ffa552';
+        el.addEventListener('raycaster-intersected',()=>{ el.setAttribute('scale','1.06 1.06 1.06'); el.setAttribute('color','#ffb778'); });
+        el.addEventListener('raycaster-intersected-cleared',()=>{ el.setAttribute('scale','1 1 1'); el.setAttribute('color',base); });
+      }
+    });
+  }
+
+  // ===== クリック動作（展開/リセット/パターン展開） =====
+  if (!AFRAME.components['clickable-button']) {
+    AFRAME.registerComponent('clickable-button',{
+      schema:{ action:{type:'string', default: ''} },
+      init(){
+        // action未指定ならテキストから自動判定（"初期", "展/収", "A"〜"K"）
+        if(!this.data.action){
+          const tEl=this.el.querySelector('a-text');
+          const txt=(tEl&&tEl.getAttribute('value')||'').trim();
+          if(txt==='展/収') this.data.action='toggle';
+          else if(txt==='初期') this.data.action='reset';
+          else if(/^([A-K])$/.test(txt)) this.data.action='pat:'+txt;
+        }
+        this.el.classList.add('hoverable');
+        if(!this.el.getAttribute('hover-glow')) this.el.setAttribute('hover-glow','');
+        const fire = ()=>this.handle();
+        this.el.addEventListener('click',fire);
+        this.el.addEventListener('triggerdown',fire);
+      },
+      handle(){
+        const cube=document.querySelector('#cube'); if(!cube) return; const comp=cube.components['cube-unfold']; if(!comp) return;
+        const a=(this.data.action||'');
+        if(a==='toggle'){ comp.toggle(); return; }
+        if(a==='reset'){ comp.reset(); return; }
+        if(a.startsWith('pat:')){ const v=a.split(':')[1]; if(comp.unfoldTo) comp.unfoldTo(v); else { comp.setPattern(v); comp.data.unfolded=true; comp.animateToPattern(); } return; }
+      }
+    });
+  }
+
+  // すべてのリモコンボタンに clickable-button を強制付与
+  (function ensureClickable(){
+    const attach=()=>{ document.querySelectorAll('#remote .clickable').forEach(el=>{ if(!el.hasAttribute('clickable-button')) el.setAttribute('clickable-button',''); }); };
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',attach); else attach();
+    window.addEventListener('load',attach);
+    setTimeout(attach, 800);
+  })();
+
+  // ===== 掴み（VR/PC） =====
+  if (!AFRAME.components['simple-grabbable']) {
+    AFRAME.registerComponent('simple-grabbable',{
+      schema:{smooth:{default:0.25}, followRotation:{default:true}},
+      init(){
+        this.isGrabbed=false; this.grabber=null; this.hovered=false;
+        this.startOffset=new THREE.Vector3(); this.target=new THREE.Vector3(); this.tmp=new THREE.Vector3();
+        this.startQuat=new THREE.Quaternion(); this.objQuat=new THREE.Quaternion();
+        const scene=this.el.sceneEl; const hands=[scene.querySelector('#rightHand'), scene.querySelector('#leftHand')];
+        this.el.addEventListener('mouseenter',()=>{ this.hovered=true; });
+        this.el.addEventListener('mouseleave',()=>{ this.hovered=false; });
+        // VR Grip
+        hands.forEach((hand)=>{ if(!hand) return; hand.addEventListener('gripdown',()=>{ if(this.hovered) this.begin(hand); }); hand.addEventListener('gripup',()=>{ if(this.isGrabbed&&this.grabber===hand){ this.end(); } }); });
+        // Mouse
+        window.addEventListener('mousedown',e=>{ if(e.button===0 && this.hovered) this.begin(scene.querySelector('#camera')); });
+        window.addEventListener('mouseup',()=>{ if(this.isGrabbed) this.end(); });
+        // 便利キー: Q/EでY回転
+        window.addEventListener('keydown',e=>{ if(!this.isGrabbed) return; const r=this.el.object3D.rotation; if(e.code==='KeyQ'){ r.y+=THREE.MathUtils.degToRad(5); } if(e.code==='KeyE'){ r.y-=THREE.MathUtils.degToRad(5); } });
+      },
+      begin(grabber){
+        this.isGrabbed=true; this.grabber=grabber;
+        const o3=this.el.object3D, g3=grabber.object3D;
+        g3.getWorldPosition(this.tmp); o3.getWorldPosition(this.target);
+        this.startOffset.copy(this.target.sub(this.tmp));
+        g3.getWorldQuaternion(this.startQuat); o3.getWorldQuaternion(this.objQuat);
+      },
+      end(){ this.isGrabbed=false; this.grabber=null; },
+      tick(){ if(!this.isGrabbed||!this.grabber) return;
+        const o3=this.el.object3D, g3=this.grabber.object3D;
+        // 目標位置 = 手(またはカメラ)位置 + 開始時オフセット
+        g3.getWorldPosition(this.tmp); this.target.copy(this.tmp).add(this.startOffset);
+        // スムーズ追従
+        o3.position.lerp(this.target, this.data.smooth);
+        // 回転も手に追従（カメラ時はYのみ）
+        if(this.data.followRotation){
+          if(this.grabber.id==='camera'){
+            const euler=new THREE.Euler(0, g3.rotation.y, 0, 'YXZ');
+            o3.setRotationFromEuler(euler);
+          } else {
+            g3.getWorldQuaternion(this.objQuat);
+            o3.quaternion.slerp(this.objQuat, this.data.smooth);
+          }
+        }
+      }
+    });
+  }
+
+  // ===== 立方体の展開（A〜K・front基準） =====
+  if (!AFRAME.components['cube-unfold']) {
+    AFRAME.registerComponent('cube-unfold',{
+      schema:{ unfolded:{type:'boolean',default:false}, variant:{type:'string',default:'A'} },
+      init(){ this.faceSize=0.6; this.thickness=0.06; this.isAnimating=false; this.buildFaces(); },
+      buildFaces(){ const s=this.faceSize, t=this.thickness, o=0.5*s + t/2; const cfg=[
+          {n:'front',  p:[0,0, o], r:[0,0,0],    c:'#ff6b6b'},
+          {n:'back',   p:[0,0,-o], r:[0,180,0],  c:'#4ecdc4'},
+          {n:'right',  p:[ o,0,0], r:[0,90,0],   c:'#45b7d1'},
+          {n:'left',   p:[-o,0,0], r:[0,-90,0],  c:'#ffa07a'},
+          {n:'top',    p:[0, o,0], r:[-90,0,0],  c:'#98d8c8'},
+          {n:'bottom', p:[0,-o,0], r:[90,0,0],   c:'#f7dc6f'}
+        ];
+        this.faces=[];
+        cfg.forEach(k=>{ const face=document.createElement('a-box'); face.setAttribute('width',s); face.setAttribute('height',s); face.setAttribute('depth',t); face.setAttribute('color',k.c); face.setAttribute('position',k.p.join(' ')); face.setAttribute('rotation',k.r.join(' ')); face.classList.add('grabbable'); const label=document.createElement('a-text'); label.setAttribute('value',k.n); label.setAttribute('align','center'); label.setAttribute('position',`0 0 ${t/2+0.01}`); label.setAttribute('scale','0.35 0.35 0.35'); label.setAttribute('color','#3a1f00'); face.appendChild(label); this.el.appendChild(face); this.faces.push({el:face,name:k.n,foldedPos:k.p,foldedRot:k.r}); });
+      },
+      patternMap(code){
+        const s=this.faceSize+0.02; // grid step
+        // front を原点 [0,0] に固定し、展開面は z=0 平面上に配置
+        const base=()=>({'back':[-2,0],'bottom':[-1,0],'front':[0,0],'top':[1,0]});
+        const assign=(b,extra)=>Object.assign({},b,extra);
+        switch(code){
+          // 1-4-1 型 A〜F
+          case 'A': return [assign(base(),{left:[-2,1],  right:[-2,-1]}), s];
+          case 'B': return [assign(base(),{left:[-1,1], right:[-2,-1]}), s];
+          case 'C': return [assign(base(),{left:[0,1],  right:[-2,-1]}), s];
+          case 'D': return [assign(base(),{left:[1,1],right:[-2,-1]}), s];
+          case 'E': return [assign(base(),{left:[-1,1], right:[-1,-1]}), s];
+          case 'F': return [assign(base(),{left:[0,1], right:[-1,-1]}), s];
+          // 1-3-2 型 G〜I
+          case 'G': return [ {back:[-2,-1], bottom:[-1,0], front:[0,0], top:[1,0], left:[-1,1],  right:[-1,-1]}, s];
+          case 'H': return [ {back:[-2,-1], bottom:[-1,0], front:[0,0], top:[1,0], left:[0,1], right:[-1,-1]}, s];
+          case 'I': return [ {back:[-2,-1], bottom:[-1,0], front:[0,0], top:[1,0], left:[1,1], right:[-1,-1]}, s];
+          // 3-3 型 J
+          case 'J': return [ {back:[-2,-1], bottom:[-1,0], front:[0,0], top:[1,1], left:[0,1], right:[-1,-1]}, s];
+          // 2-2-2 型 K
+          case 'K': return [ {back:[2,0], bottom:[-1,-1], front:[0,0], top:[1,0], left:[-2,-1], right:[0,-1]}, s];
+          default:  return [assign(base(),{left:[0,1], right:[0,-1]}), s];
+        }
+      },
+      setPattern(code){ this.data.variant=code; if(this.data.unfolded) this.animateToPattern(); },
+      animateToPattern(){ if(this.isAnimating) return; this.isAnimating=true; const dur=900, ease='easeInOutQuad'; const [grid,s]=this.patternMap(this.data.variant);
+        this.faces.forEach(f=>{ let toP,toR; if(this.data.unfolded){ const g=grid[f.name]; toP=g? {x:g[0]*s, y:g[1]*s, z:0} : {x:0,y:0,z:0}; toR={x:0,y:0,z:0}; }
+          else { toP={x:f.foldedPos[0],y:f.foldedPos[1],z:f.foldedPos[2]}; toR={x:f.foldedRot[0],y:f.foldedRot[1],z:f.foldedRot[2]}; }
+          f.el.setAttribute('animation__pos',{property:'position',to:`${toP.x} ${toP.y} ${toP.z}`,dur:dur,easing:ease});
+          f.el.setAttribute('animation__rot',{property:'rotation',to:`${toR.x} ${toR.y} ${toR.z}`,dur:dur,easing:ease});
+        });
+        setTimeout(()=>{ this.isAnimating=false; }, dur+25);
+      },
+      toggle(){ this.data.unfolded=!this.data.unfolded; this.animateToPattern(); },
+      reset(){ this.el.object3D.position.set(-1.5,1.3,-2.5); this.el.object3D.rotation.set(0,0,0); },
+      // 直接指定したパターンに展開
+      unfoldTo(code){ this.setPattern(code); this.data.unfolded=true; this.animateToPattern(); }
+    });
+  }
+
+  // ===== キーボードショートカット =====
+  (function(){
+    window.addEventListener('keydown',e=>{
+      const comp=document.querySelector('#cube')?.components['cube-unfold']; if(!comp) return;
+      if(e.code==='Space'){ e.preventDefault(); comp.toggle(); }
+      if(e.code==='KeyR'){ comp.reset(); }
+    });
+  })();
+</script>
+  </a-scene>
+</body>
+</html>
