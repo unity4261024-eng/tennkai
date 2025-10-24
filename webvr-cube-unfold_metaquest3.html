@@ -3,370 +3,384 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>VR立方体展開図 - Meta Quest対応</title>
+  <title>VR立方体展開図 - Meta Quest 3 対応</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
   <script>
+    const LAYOUT_SPACING = 1.05;
+
     AFRAME.registerComponent('cube-unfold', {
       schema: {
         isUnfolded: {type: 'boolean', default: false},
         patternIndex: {type: 'int', default: 0}
       },
-      
-      init: function() {
-        console.log('Cube component initialized');
+
+      init: function () {
         this.faces = [];
-        this.setupFaces();
         this.isAnimating = false;
-        
-        // 展開図のパターン定義
+        this.animationDuration = 1200;
+        this.layoutSpacing = LAYOUT_SPACING;
+
+        this.patternInfoEl = null;
+        this.stateInfoEl = null;
+
+        this.faceDefinitions = [
+          {name: 'front', pos: {x: 0, y: 0, z: 0.5}, rot: {x: 0, y: 0, z: 0}, color: '#FF6B6B'},
+          {name: 'back', pos: {x: 0, y: 0, z: -0.5}, rot: {x: 0, y: 180, z: 0}, color: '#4ECDC4'},
+          {name: 'right', pos: {x: 0.5, y: 0, z: 0}, rot: {x: 0, y: 90, z: 0}, color: '#45B7D1'},
+          {name: 'left', pos: {x: -0.5, y: 0, z: 0}, rot: {x: 0, y: -90, z: 0}, color: '#FFA07A'},
+          {name: 'top', pos: {x: 0, y: 0.5, z: 0}, rot: {x: -90, y: 0, z: 0}, color: '#98D8C8'},
+          {name: 'bottom', pos: {x: 0, y: -0.5, z: 0}, rot: {x: 90, y: 0, z: 0}, color: '#F7DC6F'}
+        ];
+
         this.unfoldPatterns = [
           {
             name: '十字型',
-            positions: [
-              {name: 'front', pos: {x:0, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'back', pos: {x:0, y:0, z:2}, rot: {x:0, y:0, z:0}},
-              {name: 'right', pos: {x:1, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'left', pos: {x:-1, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'top', pos: {x:0, y:1, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'bottom', pos: {x:0, y:-1, z:0}, rot: {x:0, y:0, z:0}}
-            ]
+            layout: {
+              front: {x: 0, y: 0},
+              right: {x: 1, y: 0},
+              left: {x: -1, y: 0},
+              top: {x: 0, y: 1},
+              bottom: {x: 0, y: -1},
+              back: {x: 0, y: 2}
+            }
           },
           {
             name: 'T字型',
-            positions: [
-              {name: 'front', pos: {x:0, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'back', pos: {x:1, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'right', pos: {x:2, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'left', pos: {x:3, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'top', pos: {x:0, y:1, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'bottom', pos: {x:1, y:1, z:0}, rot: {x:0, y:0, z:0}}
-            ]
+            layout: {
+              left: {x: -1, y: 0},
+              front: {x: 0, y: 0},
+              right: {x: 1, y: 0},
+              back: {x: 2, y: 0},
+              top: {x: 0, y: 1},
+              bottom: {x: 0, y: -1}
+            }
           },
           {
             name: 'L字型A',
-            positions: [
-              {name: 'front', pos: {x:0, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'back', pos: {x:1, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'right', pos: {x:0, y:1, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'left', pos: {x:0, y:2, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'top', pos: {x:1, y:1, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'bottom', pos: {x:1, y:2, z:0}, rot: {x:0, y:0, z:0}}
-            ]
+            layout: {
+              front: {x: 0, y: 0},
+              top: {x: 0, y: 1},
+              bottom: {x: 0, y: -1},
+              right: {x: 1, y: -1},
+              back: {x: 1, y: -2},
+              left: {x: -1, y: 0}
+            }
           },
           {
             name: '階段型',
-            positions: [
-              {name: 'front', pos: {x:0, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'back', pos: {x:1, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'right', pos: {x:1, y:1, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'left', pos: {x:2, y:1, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'top', pos: {x:2, y:2, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'bottom', pos: {x:3, y:2, z:0}, rot: {x:0, y:0, z:0}}
-            ]
+            layout: {
+              left: {x: -1, y: 0},
+              front: {x: 0, y: 0},
+              right: {x: 1, y: 0},
+              back: {x: 2, y: 0},
+              bottom: {x: 1, y: -1},
+              top: {x: 2, y: 1}
+            }
           },
           {
             name: '一直線型',
-            positions: [
-              {name: 'front', pos: {x:0, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'back', pos: {x:1, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'right', pos: {x:2, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'left', pos: {x:3, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'top', pos: {x:4, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'bottom', pos: {x:5, y:0, z:0}, rot: {x:0, y:0, z:0}}
-            ]
+            layout: {
+              left: {x: -2, y: 0},
+              front: {x: -1, y: 0},
+              right: {x: 0, y: 0},
+              back: {x: 1, y: 0},
+              top: {x: 2, y: 0},
+              bottom: {x: 3, y: 0}
+            }
           },
           {
             name: 'Z字型',
-            positions: [
-              {name: 'front', pos: {x:0, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'back', pos: {x:1, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'right', pos: {x:1, y:1, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'left', pos: {x:2, y:1, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'top', pos: {x:2, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'bottom', pos: {x:3, y:0, z:0}, rot: {x:0, y:0, z:0}}
-            ]
+            layout: {
+              left: {x: -1, y: 0},
+              front: {x: 0, y: 0},
+              right: {x: 1, y: 0},
+              back: {x: 1, y: -1},
+              top: {x: 0, y: 1},
+              bottom: {x: -1, y: 1}
+            }
           },
           {
             name: 'W字型',
-            positions: [
-              {name: 'front', pos: {x:0, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'back', pos: {x:1, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'right', pos: {x:1, y:-1, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'left', pos: {x:2, y:-1, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'top', pos: {x:2, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'bottom', pos: {x:3, y:0, z:0}, rot: {x:0, y:0, z:0}}
-            ]
+            layout: {
+              left: {x: -1, y: 0},
+              front: {x: 0, y: 0},
+              right: {x: 1, y: 0},
+              top: {x: 0, y: 1},
+              bottom: {x: 1, y: -1},
+              back: {x: 2, y: 0}
+            }
           },
           {
             name: 'L字型B',
-            positions: [
-              {name: 'front', pos: {x:0, y:0, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'back', pos: {x:0, y:1, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'right', pos: {x:1, y:1, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'left', pos: {x:2, y:1, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'top', pos: {x:3, y:1, z:0}, rot: {x:0, y:0, z:0}},
-              {name: 'bottom', pos: {x:2, y:2, z:0}, rot: {x:0, y:0, z:0}}
-            ]
+            layout: {
+              left: {x: -1, y: 0},
+              front: {x: 0, y: 0},
+              top: {x: 0, y: 1},
+              right: {x: 1, y: 0},
+              back: {x: 1, y: 1},
+              bottom: {x: -1, y: 1}
+            }
           }
         ];
+
+        this.createFaces();
+
+        const sceneEl = this.el.sceneEl;
+        const sceneReadyHandler = () => {
+          this.patternInfoEl = document.querySelector('#pattern-info');
+          this.stateInfoEl = document.querySelector('#fold-state');
+          this.updatePatternInfo();
+          this.updateStateText();
+          this.updatePatternHighlight(this.data.patternIndex);
+        };
+
+        if (sceneEl.hasLoaded) {
+          sceneReadyHandler();
+        } else {
+          sceneEl.addEventListener('loaded', sceneReadyHandler, {once: true});
+        }
       },
-      
-      setupFaces: function() {
+
+      createFaces: function () {
         const el = this.el;
-        
-        this.faceDefinitions = [
-          {name: 'front', pos: {x:0, y:0, z:0.5}, rot: {x:0, y:0, z:0}, color: '#FF6B6B'},
-          {name: 'back', pos: {x:0, y:0, z:-0.5}, rot: {x:0, y:180, z:0}, color: '#4ECDC4'},
-          {name: 'right', pos: {x:0.5, y:0, z:0}, rot: {x:0, y:90, z:0}, color: '#45B7D1'},
-          {name: 'left', pos: {x:-0.5, y:0, z:0}, rot: {x:0, y:-90, z:0}, color: '#FFA07A'},
-          {name: 'top', pos: {x:0, y:0.5, z:0}, rot: {x:-90, y:0, z:0}, color: '#98D8C8'},
-          {name: 'bottom', pos: {x:0, y:-0.5, z:0}, rot: {x:90, y:0, z:0}, color: '#F7DC6F'}
-        ];
-        
+
         this.faceDefinitions.forEach((face) => {
           const faceEl = document.createElement('a-plane');
           faceEl.setAttribute('width', '1');
           faceEl.setAttribute('height', '1');
-          faceEl.setAttribute('color', face.color);
+          faceEl.setAttribute('material', `color: ${face.color}; side: double; metalness: 0; roughness: 1`);
           faceEl.setAttribute('position', face.pos);
           faceEl.setAttribute('rotation', face.rot);
           faceEl.setAttribute('data-face-name', face.name);
-          
+
           const text = document.createElement('a-text');
-          text.setAttribute('value', face.name);
+          text.setAttribute('value', face.name.toUpperCase());
           text.setAttribute('align', 'center');
           text.setAttribute('position', '0 0 0.01');
-          text.setAttribute('scale', '0.5 0.5 0.5');
-          text.setAttribute('color', '#000');
+          text.setAttribute('scale', '0.45 0.45 0.45');
+          text.setAttribute('color', '#111');
           faceEl.appendChild(text);
-          
+
           el.appendChild(faceEl);
           this.faces.push(faceEl);
         });
       },
-      
-      toggle: function() {
-        if (this.isAnimating) return;
-        console.log('Toggling cube, current state:', this.data.isUnfolded);
+
+      toggle: function () {
+        if (this.isAnimating) { return; }
         this.data.isUnfolded = !this.data.isUnfolded;
+        this.updateStateText();
         this.animate();
       },
-      
-      changePattern: function(index) {
-        if (this.isAnimating) return;
-        console.log('Changing pattern to:', index);
+
+      changePattern: function (index) {
+        if (this.isAnimating) { return; }
+        if (index < 0 || index >= this.unfoldPatterns.length) { return; }
+
         this.data.patternIndex = index;
+        this.updatePatternInfo();
+        this.updatePatternHighlight(index);
+
         if (this.data.isUnfolded) {
           this.animate();
         }
       },
-      
-      animate: function() {
+
+      animate: function () {
         this.isAnimating = true;
-        const duration = 2000;
-        const pattern = this.unfoldPatterns[this.data.patternIndex];
-        console.log('Animating to pattern:', pattern.name);
-        
+        const duration = this.animationDuration;
+
         this.faces.forEach((faceEl) => {
           const faceName = faceEl.getAttribute('data-face-name');
-          let targetPos, targetRot;
-          
-          if (this.data.isUnfolded) {
-            const unfoldedData = pattern.positions.find(f => f.name === faceName);
-            targetPos = unfoldedData.pos;
-            targetRot = unfoldedData.rot;
-          } else {
-            const foldedData = this.faceDefinitions.find(f => f.name === faceName);
-            targetPos = foldedData.pos;
-            targetRot = foldedData.rot;
-          }
-          
+          const target = this.data.isUnfolded ? this.getUnfoldTarget(faceName) : this.getFoldTarget(faceName);
+
+          if (!target) { return; }
+
           faceEl.setAttribute('animation__position', {
             property: 'position',
-            to: `${targetPos.x} ${targetPos.y} ${targetPos.z}`,
+            to: `${target.position.x} ${target.position.y} ${target.position.z}`,
             dur: duration,
             easing: 'easeInOutQuad'
           });
-          
+
           faceEl.setAttribute('animation__rotation', {
             property: 'rotation',
-            to: `${targetRot.x} ${targetRot.y} ${targetRot.z}`,
+            to: `${target.rotation.x} ${target.rotation.y} ${target.rotation.z}`,
             dur: duration,
             easing: 'easeInOutQuad'
           });
         });
-        
+
         setTimeout(() => {
           this.isAnimating = false;
         }, duration);
+      },
+
+      getFoldTarget: function (faceName) {
+        return this.faceDefinitions.find((face) => face.name === faceName);
+      },
+
+      getUnfoldTarget: function (faceName) {
+        const pattern = this.unfoldPatterns[this.data.patternIndex];
+        const layout = pattern.layout[faceName];
+
+        if (!layout) { return null; }
+
+        const position = {
+          x: (layout.x || 0) * this.layoutSpacing,
+          y: (layout.y || 0) * this.layoutSpacing,
+          z: layout.z ? layout.z * this.layoutSpacing : 0
+        };
+
+        const rotation = layout.rot || {x: 0, y: 0, z: 0};
+
+        return {position, rotation};
+      },
+
+      updatePatternInfo: function () {
+        if (!this.patternInfoEl) { return; }
+        const pattern = this.unfoldPatterns[this.data.patternIndex];
+        this.patternInfoEl.setAttribute('value', `現在の展開図: ${pattern.name}`);
+      },
+
+      updateStateText: function () {
+        if (!this.stateInfoEl) { return; }
+        const stateLabel = this.data.isUnfolded ? '展開中' : '立方体';
+        this.stateInfoEl.setAttribute('value', `状態: ${stateLabel}`);
+      },
+
+      updatePatternHighlight: function (activeIndex) {
+        const buttons = document.querySelectorAll('.pattern-button');
+        buttons.forEach((btn) => {
+          const index = parseInt(btn.dataset.patternIndex, 10);
+          const baseColor = btn.dataset.defaultColor || '#3498DB';
+          const color = index === activeIndex ? '#16A085' : baseColor;
+          btn.setAttribute('color', color);
+        });
       }
     });
-    
-    // クリック可能なボタンコンポーネント
+
     AFRAME.registerComponent('clickable-button', {
       schema: {
         action: {type: 'string', default: 'toggle'}
       },
-      
-      init: function() {
+
+      init: function () {
         const el = this.el;
-        
-        // ホバー効果
+        el.classList.add('clickable');
+        el.dataset.defaultColor = el.getAttribute('color') || '#3498DB';
+
         el.addEventListener('mouseenter', () => {
-          el.setAttribute('scale', '1.1 1.1 1.1');
+          el.object3D.scale.set(1.1, 1.1, 1.1);
         });
-        
+
         el.addEventListener('mouseleave', () => {
-          el.setAttribute('scale', '1 1 1');
+          el.object3D.scale.set(1, 1, 1);
         });
-        
-        // クリックイベント
+
         el.addEventListener('click', () => {
-          console.log('Button clicked:', this.data.action);
           const cube = document.querySelector('#cube');
-          
+          const component = cube && cube.components['cube-unfold'];
+          if (!component) { return; }
+
           if (this.data.action === 'toggle') {
-            cube.components['cube-unfold'].toggle();
-          } else {
-            const patternIndex = parseInt(this.data.action);
-            cube.components['cube-unfold'].changePattern(patternIndex);
-            const patterns = cube.components['cube-unfold'].unfoldPatterns;
-            const infoText = document.querySelector('#pattern-info');
-            infoText.setAttribute('value', '現在: ' + patterns[patternIndex].name);
+            component.toggle();
+            return;
           }
+
+          const patternIndex = parseInt(this.data.action, 10);
+          if (Number.isNaN(patternIndex)) { return; }
+
+          component.changePattern(patternIndex);
         });
       }
     });
   </script>
 </head>
 <body>
-  <a-scene>
-    <!-- カメラ -->
+  <a-scene renderer="colorManagement: true; physicallyCorrectLights: true;">
     <a-entity id="rig" position="0 1.6 3">
       <a-entity id="camera" camera look-controls wasd-controls>
-        <!-- デスクトップ用カーソル -->
         <a-cursor
-          color="#00FF00"
-          opacity="0.8"
+          color="#00FFAA"
+          opacity="0.85"
           fuse="false"
           raycaster="objects: .clickable">
         </a-cursor>
       </a-entity>
-      
-      <!-- Quest用コントローラー -->
-      <a-entity 
+
+      <a-entity
         id="leftHand"
-        oculus-touch-controls="hand: left"
-        raycaster="objects: .clickable; lineColor: red; lineOpacity: 0.5"></a-entity>
-      
-      <a-entity 
+        laser-controls="hand: left"
+        raycaster="objects: .clickable; lineColor: #FF6B6B; lineOpacity: 0.6">
+      </a-entity>
+
+      <a-entity
         id="rightHand"
-        oculus-touch-controls="hand: right"
-        raycaster="objects: .clickable; lineColor: blue; lineOpacity: 0.5"
-        laser-controls></a-entity>
+        laser-controls="hand: right"
+        raycaster="objects: .clickable; lineColor: #45B7D1; lineOpacity: 0.6">
+      </a-entity>
     </a-entity>
-    
-    <!-- 立方体 -->
-    <a-entity id="cube" 
-              position="0 1.5 -1.5"
-              cube-unfold>
+
+    <a-entity id="cube" position="0 1.5 -1.8" cube-unfold></a-entity>
+
+    <a-entity id="control-panel" position="-1.8 1.5 -2.1" rotation="0 20 0">
+      <a-plane width="2.2" height="2.8" color="#243447" opacity="0.95" material="roughness: 1"></a-plane>
+
+      <a-text value="展開図コントロール" position="0 1.15 0.05" align="center" width="2" color="#ECF0F1"></a-text>
+
+      <a-box position="0 0.75 0.1" width="1.7" height="0.4" depth="0.12" color="#27AE60" clickable-button="action: toggle">
+        <a-text value="展開 / 折りたたみ" align="center" position="0 0 0.08" width="1.6" color="#FFFFFF"></a-text>
+      </a-box>
+
+      <a-text value="展開図パターン選択" position="0 0.32 0.05" align="center" width="2" color="#F1C40F"></a-text>
+
+      <a-entity position="0 -0.05 0">
+        <a-box class="pattern-button" data-pattern-index="0" position="-0.55 0.45 0.1" width="0.75" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 0">
+          <a-text value="1. 十字" align="center" position="0 0 0.07" width="0.6" color="#FFFFFF"></a-text>
+        </a-box>
+
+        <a-box class="pattern-button" data-pattern-index="1" position="0.55 0.45 0.1" width="0.75" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 1">
+          <a-text value="2. T字" align="center" position="0 0 0.07" width="0.6" color="#FFFFFF"></a-text>
+        </a-box>
+
+        <a-box class="pattern-button" data-pattern-index="2" position="-0.55 0.05 0.1" width="0.75" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 2">
+          <a-text value="3. L字A" align="center" position="0 0 0.07" width="0.6" color="#FFFFFF"></a-text>
+        </a-box>
+
+        <a-box class="pattern-button" data-pattern-index="3" position="0.55 0.05 0.1" width="0.75" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 3">
+          <a-text value="4. 階段" align="center" position="0 0 0.07" width="0.6" color="#FFFFFF"></a-text>
+        </a-box>
+
+        <a-box class="pattern-button" data-pattern-index="4" position="-0.55 -0.35 0.1" width="0.75" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 4">
+          <a-text value="5. 一直線" align="center" position="0 0 0.07" width="0.6" color="#FFFFFF"></a-text>
+        </a-box>
+
+        <a-box class="pattern-button" data-pattern-index="5" position="0.55 -0.35 0.1" width="0.75" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 5">
+          <a-text value="6. Z字" align="center" position="0 0 0.07" width="0.6" color="#FFFFFF"></a-text>
+        </a-box>
+
+        <a-box class="pattern-button" data-pattern-index="6" position="-0.55 -0.75 0.1" width="0.75" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 6">
+          <a-text value="7. W字" align="center" position="0 0 0.07" width="0.6" color="#FFFFFF"></a-text>
+        </a-box>
+
+        <a-box class="pattern-button" data-pattern-index="7" position="0.55 -0.75 0.1" width="0.75" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 7">
+          <a-text value="8. L字B" align="center" position="0 0 0.07" width="0.6" color="#FFFFFF"></a-text>
+        </a-box>
+      </a-entity>
     </a-entity>
-    
-    <!-- メインコントロールパネル -->
-    <a-entity id="control-panel" position="-2 1.5 -2">
-      <!-- 背景パネル -->
-      <a-plane width="2" height="2.5" color="#2C3E50" opacity="0.95"></a-plane>
-      
-      <!-- タイトル -->
-      <a-text value="展開図コントロール" 
-              position="0 1 0.05" 
-              align="center"
-              width="1.8"
-              color="#ECF0F1"></a-text>
-      
-      <!-- 展開/折りたたみボタン -->
-      <a-box class="clickable"
-             position="0 0.6 0.1"
-             width="1.5"
-             height="0.4"
-             depth="0.15"
-             color="#27AE60"
-             clickable-button="action: toggle">
-        <a-text value="展開 / 折りたたみ" 
-                align="center" 
-                position="0 0 0.08" 
-                width="1.4"
-                color="#FFF"></a-text>
-      </a-box>
-      
-      <!-- パターンタイトル -->
-      <a-text value="--- 展開図パターン ---" 
-              position="0 0.15 0.05" 
-              align="center"
-              width="1.8"
-              color="#F39C12"></a-text>
-      
-      <!-- パターン選択ボタン -->
-      <a-box class="clickable" position="-0.5 -0.2 0.1" width="0.7" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 0">
-        <a-text value="1.十字型" align="center" position="0 0 0.07" width="0.6" color="#FFF"></a-text>
-      </a-box>
-      
-      <a-box class="clickable" position="0.5 -0.2 0.1" width="0.7" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 1">
-        <a-text value="2.T字型" align="center" position="0 0 0.07" width="0.6" color="#FFF"></a-text>
-      </a-box>
-      
-      <a-box class="clickable" position="-0.5 -0.6 0.1" width="0.7" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 2">
-        <a-text value="3.L字型A" align="center" position="0 0 0.07" width="0.6" color="#FFF"></a-text>
-      </a-box>
-      
-      <a-box class="clickable" position="0.5 -0.6 0.1" width="0.7" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 3">
-        <a-text value="4.階段型" align="center" position="0 0 0.07" width="0.6" color="#FFF"></a-text>
-      </a-box>
-      
-      <a-box class="clickable" position="-0.5 -1.0 0.1" width="0.7" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 4">
-        <a-text value="5.一直線" align="center" position="0 0 0.07" width="0.6" color="#FFF"></a-text>
-      </a-box>
-      
-      <a-box class="clickable" position="0.5 -1.0 0.1" width="0.7" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 5">
-        <a-text value="6.Z字型" align="center" position="0 0 0.07" width="0.6" color="#FFF"></a-text>
-      </a-box>
-      
-      <a-box class="clickable" position="-0.5 -1.4 0.1" width="0.7" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 6">
-        <a-text value="7.W字型" align="center" position="0 0 0.07" width="0.6" color="#FFF"></a-text>
-      </a-box>
-      
-      <a-box class="clickable" position="0.5 -1.4 0.1" width="0.7" height="0.35" depth="0.12" color="#3498DB" clickable-button="action: 7">
-        <a-text value="8.L字型B" align="center" position="0 0 0.07" width="0.6" color="#FFF"></a-text>
-      </a-box>
-    </a-entity>
-    
-    <!-- 現在のパターン表示 -->
-    <a-text id="pattern-info"
-            value="現在: 十字型"
-            position="0 2.3 -1.5"
-            align="center"
-            width="3"
-            color="#F39C12"></a-text>
-    
-    <!-- 説明文 -->
-    <a-text value="画面中央の緑のカーソルをボタンに合わせてクリック\nQuestではコントローラーで操作"
-            position="0 2.8 -1.5"
-            align="center"
-            width="4"
-            color="#ECF0F1"></a-text>
-    
-    <!-- 環境 -->
-    <a-plane position="0 0 0" 
-             rotation="-90 0 0" 
-             width="30" 
-             height="30" 
-             color="#34495E"></a-plane>
-    
-    <a-sky color="#1A1A2E"></a-sky>
-    
-    <!-- ライト -->
-    <a-light type="ambient" color="#999"></a-light>
-    <a-light type="directional" color="#FFF" intensity="0.7" position="-1 2 1"></a-light>
+
+    <a-text id="pattern-info" value="現在の展開図: 十字型" position="0 2.4 -1.8" align="center" width="4" color="#F1C40F"></a-text>
+    <a-text id="fold-state" value="状態: 立方体" position="0 2.1 -1.8" align="center" width="3" color="#ECF0F1"></a-text>
+    <a-text value="カーソルまたはコントローラーでパネルを操作" position="0 2.75 -1.8" align="center" width="4.2" color="#BDC3C7"></a-text>
+
+    <a-ring position="0 0.01 -1.8" rotation="-90 0 0" radius-inner="0.8" radius-outer="1" color="#3A506B" material="opacity: 0.45"></a-ring>
+    <a-plane position="0 0 -1.8" rotation="-90 0 0" width="20" height="20" color="#1B262C" material="roughness: 1"></a-plane>
+
+    <a-light type="ambient" color="#666"></a-light>
+    <a-light type="directional" color="#FFFFFF" intensity="0.9" position="1 4 2" cast-shadow="true"></a-light>
+
+    <a-sky color="#0B172A"></a-sky>
   </a-scene>
 </body>
 </html>
