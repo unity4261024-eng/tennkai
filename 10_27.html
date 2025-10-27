@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cube Unfold (Quest3 Buttons: Fold / Pattern A / Pattern B)</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <style>
+    body { margin:0; }
+    .hud {
+      position: fixed; left: 12px; bottom: 12px; z-index: 10;
+      background: rgba(0,0,0,.45); color: #fff; padding: 10px 12px;
+      border-radius: 10px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+      line-height: 1.4;
+    }
+    .hud kbd { padding: 2px 6px; border: 1px solid rgba(255,255,255,.4); border-bottom-width: 2px;
+      border-radius: 6px; background: rgba(255,255,255,.1); margin: 0 4px; font-weight: 600; }
+  </style>
+</head>
+<body>
+<div class="hud">
+  <div><b>Meta Quest 3：ボタン（上＝収納 / 中＝現行展開 / 下＝別パターン）</b></div>
+</div>
+
+<a-scene background="color: #101317" renderer="colorManagement: true; physicallyCorrectLights: true;">
+  <!-- カメラ & プレイヤー -->
+  <a-entity id="rig" position="0 1.6 3">
+    <a-entity id="camera" camera wasd-controls look-controls></a-entity>
+  </a-entity>
+
+  <!-- Quest 3 コントローラー（レーザー） -->
+  <a-entity id="leftHand"  laser-controls="hand: left"  raycaster="objects: .clickable; far: 10" cursor="rayOrigin: entity"></a-entity>
+  <a-entity id="rightHand" laser-controls="hand: right" raycaster="objects: .clickable; far: 10" cursor="rayOrigin: entity"></a-entity>
+
+  <!-- 環境 -->
+  <a-entity light="type: ambient; intensity: 0.4"></a-entity>
+  <a-entity light="type: directional; intensity: 1.1; castShadow: true" position="1.5 2 1.5"></a-entity>
+  <a-plane rotation="-90 0 0" width="10" height="10" color="#1a1f2b" material="metalness:0.3;roughness:0.9;opacity:0.95"></a-plane>
+
+  <!-- 立方体（辺ヒンジ展開） -->
+  <a-entity id="cubeRoot" position="0 1 0" cube-hinge-unfold-2="pattern: A;"></a-entity>
+
+  <!-- VR ボタンパネル -->
+  <a-entity id="panel" position="-0.9 1.5 1.5" rotation="0 20 0">
+    <a-entity vr-button="label: 収納（初期）; action: fold"   position="0 0.20 0"></a-entity>
+    <a-entity vr-button="label: 展開（現行図A）; action: unfoldA" position="0 0.00 0"></a-entity>
+    <a-entity vr-button="label: 展開（別図B）; action: unfoldB" position="0 -0.20 0"></a-entity>
+  </a-entity>
+</a-scene>
+
+<script>
+// === 汎用 VR ボタン ============================================================
+AFRAME.registerComponent('vr-button', {
+  schema: { label: {type: 'string'}, action: {type: 'string'} },
+  init: function () {
+    const root = this.el;
+    const base = document.createElement('a-rounded');
+    // Fallback if a-rounded isn't available; use plane with small scale border effect.
+    const isARoundedAvailable = !!AFRAME.components['rounded'];
+    if (isARoundedAvailable) {
+      base.setAttribute('width', 0.36);
+      base.setAttribute('height', 0.12);
+      base.setAttribute('radius', 0.02);
+    } else {
+      const plane = document.createElement('a-plane');
+      plane.setAttribute('width', 0.36);
+      plane.setAttribute('height', 0.12);
+      base.appendChild(plane);
+    }
+    base.setAttribute('color', '#2e374a');
+    base.setAttribute('material', 'opacity: 0.95; metalness:0.1; roughness:0.9');
+    base.classList.add('clickable');
+    root.appendChild(base);
+
+    const label = document.createElement('a-entity');
+    label.setAttribute('text', `value: ${this.data.label}; align: center; color: #fff; width: 1.8; shader: msdf;`);
+    label.setAttribute('position', '0 0 0.001');
+    root.appendChild(label);
+
+    const onDown = () => { base.setAttribute('color', '#445577'); root.object3D.scale.set(0.98,0.98,0.98); };
+    const onUp   = () => { base.setAttribute('color', '#2e374a'); root.object3D.scale.set(1,1,1); };
+
+    root.addEventListener('mousedown', onDown);
+    root.addEventListener('mouseup', (e)=>{ onUp(); this.fire(); });
+    root.addEventListener('mouseleave', onUp);
+    root.addEventListener('blur', onUp);
+  },
+  fire: function(){
+    const cube = document.querySelector('#cubeRoot');
+    const comp = cube && cube.components['cube-hinge-unfold-2'];
+    if (!comp) return;
+    switch (this.data.action) {
+      case 'fold':
+        comp.setPattern('A');     // 現行図Aに戻してから
+        comp.data.unfolded = false;
+        comp.applyState();
+        break;
+      case 'unfoldA':
+        comp.setPattern('A');
+        comp.data.unfolded = true;
+        comp.applyState();
+        break;
+      case 'unfoldB':
+        comp.setPattern('B');
+        comp.data.unfolded = true;
+        comp.applyState();
+        break;
+    }
+  }
+});
+
+// === 立方体（辺ヒンジ方式）パターン切替対応版 ===============================
+AFRAME.registerComponent('cube-hinge-unfold-2', {
+  schema: { unfolded: {type: 'boolean', default: false}, pattern: {type: 'string', default: 'A'} },
+
+  init: function() {
+    this.faceSize = 0.8;
+    this.thickness = 0.05;
+    this.isAnimating = false;
+    this._built = false;
+    this.makeHingedCube();
+    this.setPattern(this.data.pattern);
+    this.applyState(true);
+
+    window.addEventListener('keydown', (e)=>{
+      if (e.repeat) return;
+      if (e.code === 'Space') { this.data.unfolded = !this.data.unfolded; this.applyState(); }
+      if (e.code === 'KeyR')  { this.data.unfolded = false; this.setPattern('A'); this.applyState(); }
+      if (e.code === 'Digit1'){ this.setPattern('A'); this.data.unfolded = true; this.applyState(); }
+      if (e.code === 'Digit2'){ this.setPattern('B'); this.data.unfolded = true; this.applyState(); }
+    });
+  },
+
+  makeHingedCube: function() {
+    if (this._built) return;
+    const s = this.faceSize, t = this.thickness, root = this.el;
+    const mkFace = (name, color)=>{
+      const b = document.createElement('a-box');
+      b.setAttribute('width', s);
+      b.setAttribute('height', s);
+      b.setAttribute('depth', t);
+      b.setAttribute('material', `color:${color}; metalness:0.1; roughness:0.85`);
+      b.setAttribute('shadow', 'cast: true; receive: true');
+      b.name = name; return b;
+    };
+
+    const front = mkFace('front', '#77c9f5');
+    front.setAttribute('position', `0 0 ${s/2}`);
+    root.appendChild(front);
+
+    const topPivot = document.createElement('a-entity');
+    topPivot.setAttribute('position', `0 ${s/2} ${s/2}`);
+    root.appendChild(topPivot);
+      const top = mkFace('top', '#98d8c8');
+      top.setAttribute('position', `0 ${s/2} 0`);
+      topPivot.appendChild(top);
+
+    const bottomPivot = document.createElement('a-entity');
+    bottomPivot.setAttribute('position', `0 ${-s/2} ${s/2}`);
+    root.appendChild(bottomPivot);
+      const bottom = mkFace('bottom', '#ffd166');
+      bottom.setAttribute('position', `0 ${-s/2} 0`);
+      bottomPivot.appendChild(bottom);
+
+    const leftPivot = document.createElement('a-entity');
+    leftPivot.setAttribute('position', `${-s/2} 0 ${s/2}`);
+    root.appendChild(leftPivot);
+      const left = mkFace('left', '#f4978e');
+      left.setAttribute('position', `${-s/2} 0 0`);
+      leftPivot.appendChild(left);
+
+    const rightPivot = document.createElement('a-entity');
+    rightPivot.setAttribute('position', `${s/2} 0 ${s/2}`);
+    root.appendChild(rightPivot);
+      const right = mkFace('right', '#a78bfa');
+      right.setAttribute('position', `${s/2} 0 0`);
+      rightPivot.appendChild(right);
+
+    // backPivot は最初は topPivot の子（パターンA）で作る
+    const backPivot = document.createElement('a-entity');
+    backPivot.setAttribute('position', `0 ${s} 0`); // A: top の外側の辺
+    topPivot.appendChild(backPivot);
+      const back = mkFace('back', '#80ed99');
+      back.setAttribute('position', `0 ${s/2} 0`);
+      backPivot.appendChild(back);
+
+    this.refs = {front, topPivot, top, bottomPivot, bottom, leftPivot, left, rightPivot, right, backPivot, back};
+    this._built = true;
+  },
+
+  // パターン切替：A=top 側に back、B=right 側に back
+  setPattern: function(p){
+    const s = this.faceSize;
+    const {topPivot, rightPivot, backPivot} = this.refs;
+    if (!topPivot || !rightPivot || !backPivot) return;
+
+    if (p === 'B') {
+      // 既存の親から外して rightPivot の子へ
+      if (backPivot.parentNode !== rightPivot) {
+        rightPivot.appendChild(backPivot);
+      }
+      backPivot.setAttribute('position', `${s} 0 0`); // right の外側の辺
+      this.data.pattern = 'B';
+    } else {
+      // A に戻す：topPivot の子にして、上側の外辺へ
+      if (backPivot.parentNode !== topPivot) {
+        topPivot.appendChild(backPivot);
+      }
+      backPivot.setAttribute('position', `0 ${s} 0`);
+      this.data.pattern = 'A';
+    }
+  },
+
+  applyState: function(first=false){
+    if (this.isAnimating && !first) return;
+    this.isAnimating = true;
+    const dur = 900, ease = 'easeInOutCubic', baseDelay = 80;
+    const unfolded = this.data.unfolded;
+    const pat = this.data.pattern;
+
+    // 角度指定（収納：立方体）—— どのパターンでも「閉じ」は同じ
+    const fold = {
+      top: -90, bottom: 90, left: -90, right: 90,
+      backA: -90, // A: top に追従してさらに -90 → 合計 -180
+      backB:  90  // B: right に追従してさらに +90 → 合計 +180
+    };
+
+    // 展開時の角（0°）は共通。差が出るのは backPivot の“親”と“追従軸”だけ。
+    const toTop    = unfolded ? 0 : fold.top;
+    const toBottom = unfolded ? 0 : fold.bottom;
+    const toLeft   = unfolded ? 0 : fold.left;
+    const toRight  = unfolded ? 0 : fold.right;
+    const toBack   = unfolded ? 0 : (pat==='B' ? fold.backB : fold.backA);
+
+    const setAnim = (el, prop, to, delay) => {
+      el.setAttribute(`animation__${prop}`, { property: prop, to, dur, delay, easing: ease });
+    };
+
+    setAnim(this.refs.topPivot,    'rotation', `${toTop} 0 0`,    0 * baseDelay);
+    setAnim(this.refs.leftPivot,   'rotation', `0 ${toLeft} 0`,   1 * baseDelay);
+    setAnim(this.refs.rightPivot,  'rotation', `0 ${toRight} 0`,  2 * baseDelay);
+    setAnim(this.refs.bottomPivot, 'rotation', `${toBottom} 0 0`, 3 * baseDelay);
+    // back はパターンにより回転軸の解釈が変わるが、ここでは X（A） / Y（B）を toBack に吸収
+    // ※ A: top の子 → X 回り, B: right の子 → Y 回り
+    if (pat === 'B') setAnim(this.refs.backPivot, 'rotation', `0 ${toBack} 0`, 4 * baseDelay);
+    else             setAnim(this.refs.backPivot, 'rotation', `${toBack} 0 0`, 4 * baseDelay);
+
+    setTimeout(()=>{ this.isAnimating = false; }, dur + 4*baseDelay + 60);
+  }
+});
+</script>
+</body>
+</html>
