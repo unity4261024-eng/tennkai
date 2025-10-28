@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cube Unfold — Pattern A & Pattern E (custom hinge layout)</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <style>
+    body { margin:0; }
+    .hud { position: fixed; left:12px; bottom:12px; z-index:10;
+      background: rgba(0,0,0,.45); color:#fff; padding:10px 12px; border-radius:10px;
+      font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; line-height:1.4; }
+  </style>
+</head>
+<body>
+<div class="hud"><b>Meta Quest 3：上=収納 / 中=展開A / 下=展開E（画像の黒線の軸配置）</b></div>
+
+<a-scene background="color: #101317" renderer="colorManagement: true; physicallyCorrectLights: true;">
+  <a-entity id="rig" position="0 1.6 3">
+    <a-entity id="camera" camera look-controls cursor="rayOrigin: mouse"
+      raycaster="objects: .clickable; far: 10"></a-entity>
+  </a-entity>
+
+  <a-entity id="leftHand"  laser-controls="hand: left"  raycaster="objects: .clickable; far: 10" cursor="rayOrigin: entity"></a-entity>
+  <a-entity id="rightHand" laser-controls="hand: right" raycaster="objects: .clickable; far: 10" cursor="rayOrigin: entity"></a-entity>
+
+  <a-entity light="type: ambient; intensity: 0.45"></a-entity>
+  <a-entity light="type: directional; intensity: 1.1; castShadow: true" position="1.5 2 1.5"></a-entity>
+  <a-plane rotation="-90 0 0" width="10" height="10" color="#1a1f2b"></a-plane>
+
+  <a-entity id="cubeRoot" position="0 1 0" cube-hinges-patterns="pattern: A;"></a-entity>
+
+  <a-entity id="panel" position="-0.9 1.5 1.5" rotation="0 20 0">
+    <a-entity vr-button="label: 収納; action: fold"   position="0 0.20 0"></a-entity>
+    <a-entity vr-button="label: 展開A; action: unfoldA" position="0 0.00 0"></a-entity>
+    <a-entity vr-button="label: 展開E; action: unfoldE" position="0 -0.20 0"></a-entity>
+  </a-entity>
+</a-scene>
+
+<script>
+AFRAME.registerComponent('vr-button', {
+  schema:{label:{type:'string'}, action:{type:'string'}},
+  init:function(){
+    const r=this.el; const base=document.createElement('a-plane');
+    base.setAttribute('width',0.36); base.setAttribute('height',0.12);
+    base.setAttribute('color','#2e374a'); base.setAttribute('material','opacity:0.95');
+    base.classList.add('clickable'); r.appendChild(base);
+    const tx=document.createElement('a-entity');
+    tx.setAttribute('text',`value:${this.data.label}; align:center; color:#fff; width:1.8`);
+    tx.setAttribute('position','0 0 0.001'); r.appendChild(tx);
+    r.addEventListener('mousedown',()=>base.setAttribute('color','#445577'));
+    r.addEventListener('mouseup',()=>{base.setAttribute('color','#2e374a'); this.fire();});
+  },
+  // 例: vr-button の fire()
+fire:function(){
+  const comp = document.querySelector('#cubeRoot')?.components['cube-hinges-patterns'];
+  if (!comp) return;
+  switch (this.data.action){
+    case 'fold':
+      comp.setPattern('A');      // ★ 先にAの構造へ戻す（reparentをリセット）
+      comp.data.unfolded = false; // 角度を“収納状態”へ
+      comp.applyState();         // アニメーション適用
+      break;
+    case 'unfoldA':
+      comp.setPattern('A');
+      comp.data.unfolded = true;
+      comp.applyState();
+      break;
+    case 'unfoldE':
+      comp.setPattern('E');
+      comp.data.unfolded = true;
+      comp.applyState();
+      break;
+  }
+}
+
+
+});
+
+AFRAME.registerComponent('cube-hinges-patterns', {
+  schema:{unfolded:{type:'boolean',default:false},pattern:{type:'string',default:'A'}},
+
+  init:function(){
+    this.s=0.8; this.t=0.05; this.isAnimating=false; this._built=false;
+    this.make();
+    this.setPattern(this.data.pattern);
+    this.applyState(true);
+  },
+
+  make:function(){
+    if(this._built) return;
+    const s=this.s, t=this.t, root=this.el;
+    const mk=(name,color)=>{ const b=document.createElement('a-box');
+      b.setAttribute('width',s); b.setAttribute('height',s); b.setAttribute('depth',t);
+      b.setAttribute('material',`color:${color}; metalness:0.1; roughness:0.85`);
+      b.setAttribute('shadow','cast:true; receive:true'); return b; };
+
+    // Front 基準パネル
+    const front = mk('front','#77c9f5'); front.setAttribute('position',`0 0 ${s/2}`); root.appendChild(front);
+
+    // 各辺ヒンジの pivot と面
+    // top
+    const topP = document.createElement('a-entity'); topP.setAttribute('position',`0 ${s/2} ${s/2}`); root.appendChild(topP);
+      const top = mk('top','#98d8c8'); top.setAttribute('position',`0 ${s/2} 0`); topP.appendChild(top);
+    // bottom
+    const bottomP = document.createElement('a-entity'); bottomP.setAttribute('position',`0 ${-s/2} ${s/2}`); root.appendChild(bottomP);
+      const bottom = mk('bottom','#ffd166'); bottom.setAttribute('position',`0 ${-s/2} 0`); bottomP.appendChild(bottom);
+    // left（後で E で back の下に移動）
+    const leftP = document.createElement('a-entity'); leftP.setAttribute('position',`${-s/2} 0 ${s/2}`); root.appendChild(leftP);
+      const left = mk('left','#f4978e'); left.setAttribute('position',`${-s/2} 0 0`); leftP.appendChild(left);
+    // right
+    const rightP = document.createElement('a-entity'); rightP.setAttribute('position',`${s/2} 0 ${s/2}`); root.appendChild(rightP);
+      const right = mk('right','#a78bfa'); right.setAttribute('position',`${s/2} 0 0`); rightP.appendChild(right);
+
+    // back（最初は A：top の外側）
+    const backP = document.createElement('a-entity'); backP.setAttribute('position',`0 ${s} 0`); topP.appendChild(backP);
+      const back = mk('back','#80ed99'); back.setAttribute('position',`0 ${s/2} 0`); backP.appendChild(back);
+
+    // E で使う縦連結ピボット（rightの下→backの下）
+    const rightDownP = document.createElement('a-entity'); rightDownP.setAttribute('position',`0 ${-s/2} 0`); rightP.appendChild(rightDownP);
+    const backDownP  = document.createElement('a-entity'); backDownP.setAttribute('position',`0 ${-s/2} 0`); backP.appendChild(backDownP);
+
+    this.refs = {front, topP, top, bottomP, bottom, leftP, left, rightP, right, backP, back, rightDownP, backDownP};
+    this._built = true;
+  },
+
+  setPattern:function(p){
+    const s=this.s, R=this.refs;
+    if(p==='E'){
+      if(R.backP.parentNode !== R.rightDownP){
+        R.rightDownP.appendChild(R.backP);
+      }
+      R.backP.setAttribute('position',`0 ${-s/2} 0`);
+
+      if(R.leftP.parentNode !== R.backDownP){
+        R.backDownP.appendChild(R.leftP);
+      }
+      R.leftP.setAttribute('position',`0 ${-s/2} 0`);
+
+      this.data.pattern='E';
+    }else{ // A
+      if(R.backP.parentNode !== R.topP){
+        R.topP.appendChild(R.backP);
+        R.backP.setAttribute('position',`0 ${s} 0`);
+      }
+      if(R.leftP.parentNode !== this.el){
+        this.el.appendChild(R.leftP);
+        R.leftP.setAttribute('position',`${-s/2} 0 ${s/2}`);
+      }
+      
+      this.data.pattern='A';
+    }
+  },
+
+  applyState:function(first=false){
+    if(this.isAnimating && !first) return;
+    this.isAnimating = true;
+    const dur = 900, ease='easeInOutCubic', baseDelay=80;
+    const u=this.data.unfolded, pat=this.data.pattern;
+
+    const fold = { top:-90, bottom:90, left:-90, right:90, backA:-90, backUnderRight:90 };
+
+    const toTop=u?0:fold.top, toBottom=u?0:fold.bottom, toRight=u?0:fold.right;
+    const set=(el,prop,to,d)=>{ el.setAttribute(`animation__${prop}`,{property:prop,to:to,dur,delay:d,easing:ease}); };
+
+    if(pat==='A'){
+      const toLeft=u?0:fold.left, toBack=u?0:fold.backA;
+      set(this.refs.topP,   'rotation', `${toTop} 0 0`,    0*baseDelay);
+      set(this.refs.leftP,  'rotation', `0 ${toLeft} 0`,   1*baseDelay);
+      set(this.refs.rightP, 'rotation', `0 ${toRight} 0`,  2*baseDelay);
+      set(this.refs.bottomP,'rotation', `${toBottom} 0 0`, 3*baseDelay);
+      set(this.refs.backP,  'rotation', `${toBack} 0 0`,   4*baseDelay);
+    } else { // E
+      const toBack = u?0:fold.backUnderRight;
+      const toLeft = u?0:fold.backUnderRight;
+      set(this.refs.topP,      'rotation', `${toTop} 0 0`,    0*baseDelay);
+      set(this.refs.bottomP,   'rotation', `${toBottom} 0 0`, 1*baseDelay);
+      set(this.refs.rightP,    'rotation', `0 ${toRight} 0`,  2*baseDelay);
+      set(this.refs.backP,     'rotation', `${toBack} 0 0`,   3*baseDelay);
+      set(this.refs.leftP,     'rotation', `${toLeft} 0 0`,   4*baseDelay);
+    }
+
+    setTimeout(()=>{ this.isAnimating=false; }, dur + 5*baseDelay + 60);
+  }
+});
+</script>
+</body>
+</html>
