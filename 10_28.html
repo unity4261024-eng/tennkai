@@ -19,10 +19,11 @@
   <a-entity id="rig" position="0 1.6 3">
     <a-entity id="camera" camera look-controls cursor="rayOrigin: mouse"
       raycaster="objects: .clickable; far: 10"></a-entity>
+    <a-entity id="rightHand" laser-controls="hand:right" raycaster="objects:.clickable,.grabbable;showLine:true;far:8" line="color:#ffb347"></a-entity>
+    <a-entity id="leftHand" laser-controls="hand:left" raycaster="objects:.clickable,.grabbable;showLine:true;far:8" line="color:#ffd480"></a-entity>
   </a-entity>
 
-  <a-entity id="leftHand"  laser-controls="hand: left"  raycaster="objects: .clickable; far: 10" cursor="rayOrigin: entity"></a-entity>
-  <a-entity id="rightHand" laser-controls="hand: right" raycaster="objects: .clickable; far: 10" cursor="rayOrigin: entity"></a-entity>
+  
 
   <a-entity light="type: ambient; intensity: 0.45"></a-entity>
   <a-entity light="type: directional; intensity: 1.1; castShadow: true" position="1.5 2 1.5"></a-entity>
