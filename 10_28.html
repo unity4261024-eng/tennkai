@@ -183,6 +183,17 @@ AFRAME.registerComponent('cube-hinges-patterns', {
     setTimeout(()=>{ this.isAnimating=false; }, dur + 5*baseDelay + 60);
   }
 });
+
+AFRAME.scenes[0].addEventListener('enter-vr', () => {
+  const rig = document.querySelector('#rig');
+  if (rig) rig.setAttribute('position', '0 0 0');   // ★ VR中は原点
+});
+
+AFRAME.scenes[0].addEventListener('exit-vr', () => {
+  const rig = document.querySelector('#rig');
+  if (rig) rig.setAttribute('position', '0 1.6 3'); // ★ PC確認用の視点に戻す
+});
+
 </script>
 </body>
 </html>
