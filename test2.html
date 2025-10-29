@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cube Unfold — A/E 展開 + 掴み (simple-grabbable)</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <style>
+    body { margin:0; }
+    .hud { position: fixed; left:12px; bottom:12px; z-index:10;
+      background: rgba(0,0,0,.45); color:#fff; padding:10px 12px; border-radius:10px;
+      font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12px; line-height:1.4; }
+  </style>
+</head>
+<body>
+<div class="hud"><b>上=収納 / 中=展開A / 下=展開E｜レーザー/マウスで立方体をつかめます</b></div>
+
+<a-scene background="color: #101317" renderer="colorManagement: true; physicallyCorrectLights: true;">
+  <!-- プレイヤー（PC確認用視点） -->
+  <a-entity id="rig" position="0 1.6 3">
+    <a-entity id="camera" camera look-controls cursor="rayOrigin: mouse"
+      raycaster="objects: .clickable; far: 10"></a-entity>
+    <!-- コントローラ（右手/左手） -->
+    <a-entity id="rightHand"
+      laser-controls="hand:right"
+      raycaster="objects:.clickable,.grabbable;showLine:true;far:8"
+      line="color:#ffb347"
+      cursor="rayOrigin: entity"></a-entity>
+    <a-entity id="leftHand"
+      laser-controls="hand:left"
+      raycaster="objects:.clickable,.grabbable;showLine:true;far:8"
+      line="color:#ffd480"
+      cursor="rayOrigin: entity"></a-entity>
+  </a-entity>
+
+  <!-- 環境 -->
+  <a-entity light="type: ambient; intensity: 0.45"></a-entity>
+  <a-entity light="type: directional; intensity: 1.1; castShadow: true" position="1.5 2 1.5"></a-entity>
+  <a-plane rotation="-90 0 0" width="10" height="10" color="#1a1f2b"></a-plane>
+
+  <!-- 立方体ルート：クリック対象 & 掴み対象 -->
+  <a-entity id="cubeRoot"
+    position="0 1 0"
+    class="clickable grabbable"
+    simple-grabbable="smooth:0.25; followRotation:true"
+    cube-hinges-patterns="pattern: A;"></a-entity>
+
+  <!-- ボタンパネル -->
+  <a-entity id="panel" position="-0.9 1.5 1.5" rotation="0 20 0">
+    <a-entity vr-button="label: 収納; action: fold"    position="0 0.20 0"></a-entity>
+    <a-entity vr-button="label: 展開A; action: unfoldA" position="0 0.00 0"></a-entity>
+    <a-entity vr-button="label: 展開E; action: unfoldE" position="0 -0.20 0"></a-entity>
+    <a-entity vr-button="label: 展開D; action: unfoldE" position="0 -0.60 0"></a-entity>
+  </a-entity>
+</a-scene>
+
+<script>
+/* ========= 汎用：任意の面ピボット(child)を、任意の面ピボット(parent)の任意の辺(edge)にぶら下げる =========
+   edge: 'up' | 'down' | 'left' | 'right'
+   使い方例）hangToEdge(this.refs.backP, this.refs.rightP, 'down', this.s);  // backP を rightP の下辺にぶら下げる
+*/
+function hangToEdge(childPivot, parentPivot, edge, s) {
+  const pos = { up:`0 ${ s/2} 0`, down:`0 ${-s/2} 0`, left:`${-s/2} 0 0`, right:`${ s/2} 0 0` }[edge];
+
+  // 1) 親の「辺」位置に edgePivot を用意（既存があれば座標を更新）
+  let edgePivot = parentPivot.querySelector(`:scope > a-entity[data-edge='edge-${edge}']`);
+  if (!edgePivot) {
+    edgePivot = document.createElement('a-entity');
+    edgePivot.dataset.edge = `edge-${edge}`;
+    parentPivot.appendChild(edgePivot);
+  }
+  edgePivot.setAttribute('position', pos);      // ★辺の中心へ
+  edgePivot.setAttribute('rotation', '0 0 0');  // 念のためリセット
+  edgePivot.setAttribute('visible', true);
+
+  // 2) 子ピボットをぶら下げ（子ピボットは軸上=原点でOK）
+  if (childPivot.parentNode !== edgePivot) edgePivot.appendChild(childPivot);
+  childPivot.setAttribute('position', '0 0 0');   // ★子は軸上
+  childPivot.setAttribute('rotation', '0 0 0');
+  childPivot.setAttribute('visible', true);
+}
+
+
+/* ===================== VRボタン（収納→A構造へ戻す） ===================== */
+AFRAME.registerComponent('vr-button', {
+  schema:{label:{type:'string'}, action:{type:'string'}},
+  init:function(){
+    const r=this.el;
+    const base=document.createElement('a-plane');
+    base.setAttribute('width',0.36); base.setAttribute('height',0.12);
+    base.setAttribute('color','#2e374a'); base.setAttribute('material','opacity:0.95');
+    base.classList.add('clickable'); r.appendChild(base);
+    const tx=document.createElement('a-entity');
+    tx.setAttribute('text',`value:${this.data.label}; align:center; color:#fff; width:1.8`);
+    tx.setAttribute('position','0 0 0.001'); r.appendChild(tx);
+    r.addEventListener('mousedown',()=>base.setAttribute('color','#445577'));
+    r.addEventListener('mouseup',()=>{base.setAttribute('color','#2e374a'); this.fire();});
+  },
+  fire:function(){
+    const comp=document.querySelector('#cubeRoot')?.components['cube-hinges-patterns'];
+    if(!comp) return;
+
+    switch(this.data.action){
+      case 'fold':
+        comp.setPattern('A');        // ★ 必ずA構造に戻す（Eのぶら下げ状態を解消）
+        comp.data.unfolded=false;    // ★ 収納へ
+        comp.applyState();           // ★ アニメ適用
+        break;
+
+      case 'unfoldA':
+        comp.setPattern('A');
+        comp.data.unfolded=true;
+        comp.applyState();
+        break;
+
+      case 'unfoldE':
+        comp.setPattern('E');
+        comp.data.unfolded=true;
+        comp.applyState();
+        break;
+    }
+  }
+});
+
+
+
+/* ===================== 掴み（VR/PC）simple-grabbable ===================== */
+if (!AFRAME.components['simple-grabbable']) {
+  AFRAME.registerComponent('simple-grabbable',{
+    schema:{smooth:{default:0.25}, followRotation:{default:true}},
+    init(){
+      this.isGrabbed=false;        // 掴み中フラグ
+      this.grabber=null;           // 掴んでいる手/カメラ
+      this.hovered=false;          // レーザーが当たっているか
+      this.startOffset=new THREE.Vector3(); // 掴み開始時の相対オフセット(位置)
+      this.target=new THREE.Vector3();      // 追従先の目標位置
+      this.tmp=new THREE.Vector3();         // 作業用ベクトル
+      this.startQuat=new THREE.Quaternion();// 掴み開始時の手の回転
+      this.objQuat=new THREE.Quaternion();  // 追従用の一時クォータニオン
+
+      const scene=this.el.sceneEl;
+      const hands=[scene.querySelector('#rightHand'), scene.querySelector('#leftHand')];
+
+      // レーザーの当たり/外れで hover を更新
+      this.el.addEventListener('mouseenter',()=>{ this.hovered=true; });
+      this.el.addEventListener('mouseleave',()=>{ this.hovered=false; });
+
+      // VR: グリップボタンで掴む/離す
+      hands.forEach((hand)=>{
+        if(!hand) return;
+        hand.addEventListener('gripdown',()=>{
+          if(this.hovered) this.begin(hand);
+        });
+        hand.addEventListener('gripup',()=>{
+          if(this.isGrabbed && this.grabber===hand) this.end();
+        });
+      });
+
+      // PC: 左クリックで掴む/離す
+      window.addEventListener('mousedown',e=>{
+        if(e.button===0 && this.hovered){
+          const cam=scene.querySelector('#camera');
+          this.begin(cam);
+        }
+      });
+      window.addEventListener('mouseup',()=>{
+        if(this.isGrabbed) this.end();
+      });
+
+      // 任意: Q/EでY回転（微調整）
+      window.addEventListener('keydown',e=>{
+        if(!this.isGrabbed) return;
+        const r=this.el.object3D.rotation;
+        if(e.code==='KeyQ'){ r.y+=THREE.MathUtils.degToRad(5); }
+        if(e.code==='KeyE'){ r.y-=THREE.MathUtils.degToRad(5); }
+      });
+    },
+    begin(grabber){
+      this.isGrabbed=true; this.grabber=grabber;
+      const o3=this.el.object3D, g3=grabber.object3D;
+      // 掴み開始時の手→オブジェクト相対ベクトルを記録
+      g3.getWorldPosition(this.tmp);
+      o3.getWorldPosition(this.target);
+      this.startOffset.copy(this.target.sub(this.tmp));
+      // 回転も記録
+      g3.getWorldQuaternion(this.startQuat);
+      o3.getWorldQuaternion(this.objQuat);
+    },
+    end(){ this.isGrabbed=false; this.grabber=null; },
+    tick(){
+      if(!this.isGrabbed||!this.grabber) return;
+      const o3=this.el.object3D, g3=this.grabber.object3D;
+
+      // 目標位置 = 現在の手位置 + 開始時オフセット
+      g3.getWorldPosition(this.tmp);
+      this.target.copy(this.tmp).add(this.startOffset);
+
+      // スムーズ追従（位置）
+      o3.position.lerp(this.target, this.data.smooth);
+
+      // 回転追従（マウス=カメラの時はYのみ、VRの手は全軸）
+      if(this.data.followRotation){
+        if(this.grabber.id==='camera'){
+          const euler=new THREE.Euler(0, g3.rotation.y, 0, 'YXZ');
+          o3.setRotationFromEuler(euler);
+        } else {
+          g3.getWorldQuaternion(this.objQuat);
+          o3.quaternion.slerp(this.objQuat, this.data.smooth);
+        }
+      }
+    }
+  });
+}
+
+/* ===================== 展開システム（A/E） ===================== */
+AFRAME.registerComponent('cube-hinges-patterns', {
+  schema:{unfolded:{type:'boolean',default:false},pattern:{type:'string',default:'A'}},
+
+  init:function(){
+    this.s=0.8; this.t=0.05; this.isAnimating=false; this._built=false;
+    this.make(); this.setPattern(this.data.pattern); this.applyState(true);
+  },
+
+  make:function(){
+    if(this._built) return;
+    const s=this.s, t=this.t, root=this.el;
+    const mk=(name,color)=>{ const b=document.createElement('a-box');
+      b.setAttribute('width',s); b.setAttribute('height',s); b.setAttribute('depth',t);
+      b.setAttribute('material',`color:${color}; metalness:0.1; roughness:0.85`);
+      b.setAttribute('shadow','cast:true; receive:true'); return b; };
+
+    const front = mk('front','#77c9f5'); front.setAttribute('position',`0 0 ${s/2}`); root.appendChild(front);
+
+    const topP = document.createElement('a-entity');   topP.setAttribute('position',`0 ${s/2} ${s/2}`); root.appendChild(topP);
+      const top = mk('top','#98d8c8');                 top.setAttribute('position',`0 ${s/2} 0`);       topP.appendChild(top);
+
+    const bottomP = document.createElement('a-entity'); bottomP.setAttribute('position',`0 ${-s/2} ${s/2}`); root.appendChild(bottomP);
+      const bottom = mk('bottom','#ffd166');           bottom.setAttribute('position',`0 ${-s/2} 0`);      bottomP.appendChild(bottom);
+
+    const leftP = document.createElement('a-entity');   leftP.setAttribute('position',`${-s/2} 0 ${s/2}`);  root.appendChild(leftP);
+      const left = mk('left','#f4978e');               left.setAttribute('position',`${-s/2} 0 0`);        leftP.appendChild(left);
+
+    const rightP = document.createElement('a-entity');  rightP.setAttribute('position',`${s/2} 0 ${s/2}`);  root.appendChild(rightP);
+      const right = mk('right','#a78bfa');             right.setAttribute('position',`${s/2} 0 0`);        rightP.appendChild(right);
+
+    const backP = document.createElement('a-entity');   backP.setAttribute('position',`0 ${s} 0`);          topP.appendChild(backP);
+      const back = mk('back','#80ed99');               back.setAttribute('position',`0 ${s/2} 0`);         backP.appendChild(back);
+
+    const rightDownP = document.createElement('a-entity'); rightDownP.setAttribute('position',`0 ${-s/2} 0`); rightP.appendChild(rightDownP);
+    const backDownP  = document.createElement('a-entity');  backDownP.setAttribute('position',`0 ${-s/2} 0`);  backP.appendChild(backDownP);
+
+    this.refs = {front, topP, top, bottomP, bottom, leftP, left, rightP, right, backP, back, rightDownP, backDownP};
+    this._built = true;
+  },
+
+  
+
+
+  setPattern:function(p){
+    const s=this.s, R=this.refs;
+    if(p==='E'){
+      hangToEdge(R.bottomP,  R.rightP, 'down', s);  // backP を rightP の「下辺」にぶら下げ
+
+      // back / left は A と同じ構造に戻しておく（邪魔しないように）
+      if (R.backP.parentNode !== R.topP) {
+        R.topP.appendChild(R.backP);
+        R.backP.setAttribute('position', `0 ${s} 0`);
+        R.backP.setAttribute('rotation', '0 0 0');
+        R.backP.setAttribute('visible', true);
+      }
+      if (R.leftP.parentNode !== this.el) {
+        this.el.appendChild(R.leftP);
+        R.leftP.setAttribute('position', `${-s/2} 0 ${s/2}`);
+        R.leftP.setAttribute('rotation', '0 0 0');
+        R.leftP.setAttribute('visible', true);
+      }
+      this.data.pattern='E';
+      
+    }else{
+      // setPattern() の A 側分岐に追記
+      const killEdges = (pivot)=>{
+        if(!pivot) return;
+        pivot.querySelectorAll(":scope > a-entity[data-edge]").forEach(n => n.remove());
+      };
+      [ this.refs.rightP, this.refs.backP, this.refs.topP, this.refs.leftP, this.refs.bottomP ].forEach(killEdges);
+
+      // bottomP を必ず root 直下 & 既定座標へ
+      if (this.refs.bottomP.parentNode !== this.el) this.el.appendChild(this.refs.bottomP);
+      this.refs.bottomP.setAttribute('position', `0 ${-this.s/2} ${this.s/2}`);
+      this.refs.bottomP.setAttribute('rotation', '0 0 0');
+      this.refs.bottomP.setAttribute('visible', true);
+
+      // （back/left も同様に既定へ戻す処理は今のままでOK）
+
+      if (R.bottomP.parentNode !== this.el) {
+      this.el.appendChild(R.bottomP);
+      R.bottomP.setAttribute('position', `0 ${-s/2} ${s/2}`);
+      R.bottomP.setAttribute('rotation', '0 0 0');
+      R.bottomP.setAttribute('visible', true);
+      }
+    // back / left も A の既定に戻す（念のため）
+      if (R.backP.parentNode !== R.topP) {
+        R.topP.appendChild(R.backP);
+        R.backP.setAttribute('position', `0 ${s} 0`);
+        R.backP.setAttribute('rotation', '0 0 0');
+        R.backP.setAttribute('visible', true);
+      }
+      if (R.leftP.parentNode !== this.el) {
+        this.el.appendChild(R.leftP);
+        R.leftP.setAttribute('position', `${-s/2} 0 ${s/2}`);
+        R.leftP.setAttribute('rotation', '0 0 0');
+        R.leftP.setAttribute('visible', true);
+      }
+      this.data.pattern='A';
+    }
+  },
+
+  applyState:function(first=false){
+    // applyState() の最初に
+    const clearAnim = el => el.removeAttribute('animation__rotation');
+    ['topP','bottomP','leftP','rightP','backP','top','bottom','left','right','back','front']
+      .forEach(k => this.refs[k] && clearAnim(this.refs[k]));
+
+
+    
+    this.isAnimating=true;
+    const dur=900, ease='easeInOutCubic', baseDelay=80;
+    const u=this.data.unfolded, pat=this.data.pattern;
+    const fold = { top:-90, bottom:90, left:-90, right:90, backA:-90, backUnderRight:90 };
+
+    const toTop=u?0:fold.top, toBottom=u?0:fold.bottom, toRight=u?0:fold.right;
+    const set=(el,prop,to,d)=>{ el.setAttribute(`animation__${prop}`,{property:prop,to:to,dur,delay:d,easing:ease}); };
+
+    if(pat==='A'){
+      const toLeft=u?0:fold.left, toBack=u?0:fold.backA;
+      set(this.refs.topP,   'rotation', `${toTop} 0 0`,    0*baseDelay);
+      set(this.refs.leftP,  'rotation', `0 ${toLeft} 0`,   1*baseDelay);
+      set(this.refs.rightP, 'rotation', `0 ${toRight} 0`,  1*baseDelay);
+      set(this.refs.bottomP,'rotation', `${toBottom} 0 0`, 1*baseDelay);
+      set(this.refs.backP,  'rotation', `${toBack} 0 0`,   2*baseDelay);
+    } else { // E
+      const toBottomUnderRight =u ? 0:fold.backUnderRight;
+      const toBackFixed = 0, toLeftFixed = 0; 
+      set(this.refs.topP,    'rotation', `${toTop} 0 0`,    0*baseDelay);
+      set(this.refs.bottomP, 'rotation', `${toBottomUnderRight} 0 0`, 2*baseDelay);
+      set(this.refs.rightP,  'rotation', `0 ${toRight} 0`,  1*baseDelay);
+      set(this.refs.backP,   'rotation', `0 0 0`,   3*baseDelay);
+      set(this.refs.leftP,   'rotation', `0 0 0`,   4*baseDelay);
+    }
+    setTimeout(()=>{ this.isAnimating=false; }, dur + 5*baseDelay + 60);
+  }
+});
+
+/* （任意）VR入退室で rig 位置を切り替え：VR中は原点、PCでは(0,1.6,3) */
+AFRAME.scenes[0].addEventListener('enter-vr', () => {
+  const rig = document.querySelector('#rig'); if (rig) rig.setAttribute('position', '0 0 0');
+});
+AFRAME.scenes[0].addEventListener('exit-vr', () => {
+  const rig = document.querySelector('#rig'); if (rig) rig.setAttribute('position', '0 1.6 3');
+});
+</script>
+</body>
+</html>
