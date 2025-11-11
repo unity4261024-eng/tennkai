@@ -782,5 +782,40 @@
       }
     }
   </script>
+  <script>
+    window.addEventListener('load', function () {
+      function hasEnterVR() {
+        return Array.from(document.querySelectorAll('button'))
+          .some(b => /enter\s*vr/i.test((b.textContent || '')));
+      }
+      // 既に公式VRButtonがあれば何もしない / WebXR非対応なら出さない
+      if (hasEnterVR() || !('xr' in navigator)) return;
+    
+      const btn = document.createElement('button');
+      btn.textContent = 'Enter VR';
+      Object.assign(btn.style, {
+        position: 'fixed', right: '20px', bottom: '20px', zIndex: 9999,
+        padding: '12px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+        background: '#4f46e5', color: '#fff', fontWeight: 'bold',
+        boxShadow: '0 6px 18px rgba(0,0,0,0.25)'
+      });
+      document.body.appendChild(btn);
+    
+      btn.addEventListener('click', async () => {
+        try {
+          if (!window.renderer) { console.error('renderer not found'); return; }
+          window.renderer.xr.enabled = true;
+          const session = await navigator.xr.requestSession('immersive-vr', {
+            optionalFeatures: ['local-floor', 'bounded-floor']
+          });
+          await window.renderer.xr.setSession(session);
+          btn.style.display = 'none';
+          session.addEventListener('end', () => { btn.style.display = 'block'; });
+        } catch (e) {
+          console.error('[fallback enter vr] failed:', e);
+        }
+      });
+    });
+    </script>
 </body>
 </html>
