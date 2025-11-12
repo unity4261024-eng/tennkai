@@ -262,7 +262,7 @@
       panel.add(unfoldB, foldB, resetB);
 
       // パネルの位置（ユーザーから見て左手側）
-      panel.position.set(-2.4, 1.2, 2);
+      panel.position.set(-2.4, 1.2, 1);
       panel.rotation.y = 0.15;
       vrUIRoot.add(panel);
     }
@@ -809,6 +809,60 @@
         window.scene.add(controller);
         window.__controllers[i] = controller;
     }
+
+    // === Grab 状態 ===
+    let grabbing = null;           // つかんでいる controller
+    let grabPivot = null;          // reparent 中継点
+
+    function startGrab(controller) {
+        if (grabbing) return;
+        // 直前のレイキャストを再利用してもOK。ここでは毎回計算。
+        const raycaster = new THREE.Raycaster();
+        const tmp = new THREE.Matrix4();
+        tmp.identity().extractRotation(controller.matrixWorld);
+        raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+        raycaster.ray.direction.set(0,0,-1).applyMatrix4(tmp);
+
+        const hits = raycaster.intersectObjects(window.vrGrabbables || [], false);
+        if (hits.length === 0) return;
+
+        grabbing = controller;
+        grabPivot = new THREE.Group();
+
+        // ワールド座標を壊さないよう attach で付け替え
+        window.scene.add(grabPivot);
+        grabPivot.position.copy(hits[0].point);
+        grabPivot.quaternion.copy(controller.quaternion);
+
+        // pivot を controller の子にして、
+        controller.add(grabPivot);
+
+        // stage を pivot の子に（ワールド姿勢維持で付け替え）
+        grabPivot.attach(stage);
+    }
+
+    function endGrab() {
+        if (!grabbing) return;
+        // stage を scene 直下に戻す（ワールド姿勢維持）
+        window.scene.attach(stage);
+        if (grabPivot && grabPivot.parent) grabPivot.parent.remove(grabPivot);
+        grabbing = null;
+        grabPivot = null;
+    }
+
+    // コントローラーのイベントに紐づけ（あなたの既存の登録と一緒に）
+    for (let i = 0; i < 2; i++) {
+        const controller = renderer.xr.getController(i);
+        controller.addEventListener('selectstart', () => {
+            controller.userData.selecting = true;
+            startGrab(controller);        // ★ トリガーで掴む
+        });
+        controller.addEventListener('selectend', () => {
+            controller.userData.selecting = false;
+            endGrab();                    // ★ トリガー離しで放す
+        });
+    }
+
   </script>
   <script>
     window.addEventListener('load', function () {
