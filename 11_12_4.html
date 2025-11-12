@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>立方体の展開図 - VR専用版</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+    #container { width: 100vw; height: 100vh; }
+    .webxr-button, .webxr-button button {
+      position: fixed !important;
+      right: 20px !important;
+      bottom: 20px !important;
+      z-index: 9999 !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <script>
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x101014);
+
+    const stage = new THREE.Group();
+    scene.add(stage);
+
+    const vrUIRoot = new THREE.Group();
+    stage.add(vrUIRoot);
+
+    const vrButtons = [];
+    let vrHovered = null;
+
+    function makeCanvasLabel(text, w = 512, h = 128) {
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      const grd = ctx.createLinearGradient(0,0,w,h);
+      grd.addColorStop(0,'#5b21b6');
+      grd.addColorStop(1,'#7c3aed');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0,0,w,h);
+      ctx.fillStyle = '#ffffff';
+      let fontSize = 56;
+      ctx.font = 'bold ' + fontSize + 'px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      while (ctx.measureText(text).width > w * 0.9 && fontSize > 18) {
+        fontSize -= 2;
+        ctx.font = 'bold ' + fontSize + 'px Arial';
+      }
+      ctx.fillText(text, w/2, h/2);
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    function makeVRButton(label, onClick) {
+      const geo = new THREE.PlaneGeometry(0.6, 0.18);
+      const mat = new THREE.MeshBasicMaterial({ map: makeCanvasLabel(label), transparent: true, opacity: 1 });
+      const m = new THREE.Mesh(geo, mat);
+      m.userData.onClick = onClick;
+      m.userData.label = label;
+      vrButtons.push(m);
+      return m;
+    }
+
+    function layoutVRPanel() {
+      const panel = new THREE.Group();
+
+      const title = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.8, 0.25),
+        new THREE.MeshBasicMaterial({ map: makeCanvasLabel('展開パターンを選択', 1024, 160), transparent: true })
+      );
+      title.position.set(0, 0.95, 0);
+      panel.add(title);
+
+      const buttons = patternNames.map((name, idx) => makeVRButton(name, () => {
+        currentPattern = idx;
+        setProgress(currentProgress);
+      }));
+
+      const cols = 2, dx = 0.7, dy = 0.22;
+      buttons.forEach((b, i) => {
+        const row = Math.floor(i/cols);
+        const col = i%cols;
+        b.position.set((col-0.5)*dx, 0.65 - row*dy, 0);
+        panel.add(b);
+      });
+
+      const unfoldB = makeVRButton('展開', () => animateTo(1));
+      const foldB   = makeVRButton('閉じる', () => animateTo(0));
+      const resetB  = makeVRButton('リセット', () => setProgress(0));
+      unfoldB.position.set(-0.7, -0.95, 0);
+      foldB.position.set(0.0,  -0.95, 0);
+      resetB.position.set(0.7, -0.95, 0);
+      panel.add(unfoldB, foldB, resetB);
+
+      panel.position.set(-1.2, 1.25, -0.2);
+      panel.rotation.y = 0.2;
+      vrUIRoot.add(panel);
+    }
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(5, 5, 8);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('container').appendChild(renderer.domElement);
+
+    window.THREE = THREE;
+    window.renderer = renderer;
+    window.scene = scene;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.8);
+    dl.position.set(5,10,5);
+    scene.add(dl);
+
+    const gridHelper = new THREE.GridHelper(15, 15, 0x444444, 0x222222);
+    gridHelper.position.y = 0;
+    stage.add(gridHelper);
+
+    stage.position.set(0, 0, -3);
+    stage.rotation.y = 0.25;
+
+    const colors = {
+      bottom: 0x0066ff, top: 0x0fffff, front: 0xff0000, back: 0x00cc00, left: 0xffcc00, right: 0x9933ff
+    };
+
+    const closedCube = {
+      bottom: [[-1,0,-1], [1,0,-1], [1,0,1], [-1,0,1]],
+      left:   [[-1,0,-1], [-1,0,1], [-1,2,1], [-1,2,-1]],
+      right:  [[1,0,-1], [1,0,1], [1,2,1], [1,2,-1]],
+      back:   [[-1,0,1], [1,0,1], [1,2,1], [-1,2,1]],
+      front:  [[-1,0,-1], [1,0,-1], [1,2,-1], [-1,2,-1]],
+      top:    [[-1,2,-1], [1,2,-1], [1,2,1], [-1,2,1]]
+    };
+
+    const faces = {};
+    let currentProgress = 0;
+    let currentPattern = 0;
+
+    for (const [name, verts] of Object.entries(closedCube)) {
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(verts.flat());
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setIndex([0, 1, 2, 0, 2, 3]);
+      geometry.computeVertexNormals();
+
+      const material = new THREE.MeshStandardMaterial({
+        color: colors[name], side: THREE.DoubleSide, transparent: true, opacity: 0.92
+      });
+
+      const mesh = new THREE.Mesh(geometry, material);
+      const edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geometry),
+        new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 })
+      );
+      mesh.add(edges);
+      stage.add(mesh);
+      faces[name] = mesh;
+    }
+
+    function updateVertices(name, verts) {
+      const pos = faces[name].geometry.attributes.position;
+      verts.forEach((v, i) => {
+        pos.array[i * 3] = v[0];
+        pos.array[i * 3 + 1] = v[1];
+        pos.array[i * 3 + 2] = v[2];
+      });
+      pos.needsUpdate = true;
+      faces[name].geometry.computeVertexNormals();
+    }
+
+    function rotX(point, pivot, deg) {
+      const rad = deg * Math.PI / 180;
+      const [px, py, pz] = point; const [vx, vy, vz] = pivot;
+      const dx = px - vx, dy = py - vy, dz = pz - vz;
+      const c = Math.cos(rad), s = Math.sin(rad);
+      return [dx + vx, dy * c - dz * s + vy, dy * s + dz * c + vz];
+    }
+
+    function rotZ(point, pivot, deg) {
+      const rad = deg * Math.PI / 180;
+      const [px, py, pz] = point; const [vx, vy, vz] = pivot;
+      const dx = px - vx, dy = py - vy, dz = pz - vz;
+      const c = Math.cos(rad), s = Math.sin(rad);
+      return [dx * c - dy * s + vx, dx * s + dy * c + vy, dz + vz];
+    }
+
+    function rotateAroundEdge(point, edgeP1, edgeP2, deg) {
+      const rad = deg * Math.PI / 180;
+      const [px, py, pz] = point;
+      const [e1x, e1y, e1z] = edgeP1;
+      const [e2x, e2y, e2z] = edgeP2;
+      const axisX = e2x - e1x, axisY = e2y - e1y, axisZ = e2z - e1z;
+      const axisLen = Math.sqrt(axisX*axisX + axisY*axisY + axisZ*axisZ);
+      const ax = axisX / axisLen, ay = axisY / axisLen, az = axisZ / axisLen;
+      const dx = px - e1x, dy = py - e1y, dz = pz - e1z;
+      const c = Math.cos(rad), s = Math.sin(rad), t = 1 - c;
+      const rx = (t*ax*ax + c)*dx + (t*ax*ay - s*az)*dy + (t*ax*az + s*ay)*dz;
+      const ry = (t*ax*ay + s*az)*dx + (t*ay*ay + c)*dy + (t*ay*az - s*ax)*dz;
+      const rz = (t*ax*az - s*ay)*dx + (t*ay*az + s*ax)*dy + (t*az*az + c)*dz;
+      return [rx + e1x, ry + e1y, rz + e1z];
+    }
+
+    function unfold1_4_1_A(t) {
+      const angle = t * 90;
+      const frontVerts = closedCube.front;
+      updateVertices('front', closedCube.front);
+      const leftVerts = closedCube.left.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
+      updateVertices('left', leftVerts);
+      const rightVerts = closedCube.right.map(v => rotateAroundEdge(v, frontVerts[1], frontVerts[2], angle));
+      updateVertices('right', rightVerts);
+      const backStep1 = closedCube.back.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const backVerts = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[2], angle));
+      updateVertices('back', backVerts);
+      const topVerts = closedCube.top.map(v => rotateAroundEdge(v, [-1,2,-1], [1,2,-1], -angle));
+      updateVertices('top', topVerts);
+      const bottomVerts = closedCube.bottom.map(v => rotateAroundEdge(v, [-1,0,-1], [1,0,-1], angle));
+      updateVertices('bottom', bottomVerts);
+    }
+
+    function unfold1_4_1_B(t) {
+      const angle = t * 90;
+      updateVertices('front', closedCube.front);
+      const leftVerts = closedCube.left.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
+      updateVertices('left', leftVerts);
+      const rightVerts = closedCube.right.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      updateVertices('right', rightVerts);
+      const backStep1 = closedCube.back.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const backVerts = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[2], angle));
+      updateVertices('back', backVerts);
+      const topStep3 = closedCube.top.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
+      const topVerts = topStep3.map(v => rotateAroundEdge(v, leftVerts[2], leftVerts[3], -angle));
+      updateVertices('top', topVerts);
+      const bottomVerts = closedCube.bottom.map(v => rotateAroundEdge(v, [-1,0,-1], [1,0,-1], angle));
+      updateVertices('bottom', bottomVerts);
+    }
+
+    function unfold1_4_1_C(t) {
+      const angle = t * 90;
+      updateVertices('front', closedCube.front);
+      const leftVerts = closedCube.left.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
+      updateVertices('left', leftVerts);
+      const rightVerts = closedCube.right.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      updateVertices('right', rightVerts);
+      const backStep1 = closedCube.back.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const backVerts = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[2], angle));
+      updateVertices('back', backVerts);
+      const topStep3 = closedCube.top.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
+      const topVerts = topStep3.map(v => rotateAroundEdge(v, leftVerts[2], leftVerts[3], -angle));
+      updateVertices('top', topVerts);
+      const bottomStep1 = closedCube.bottom.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const bottomVerts = bottomStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      updateVertices('bottom', bottomVerts);
+    }
+
+    function unfold1_4_1_D(t) {
+      const angle = t * 90;
+      const frontVerts = closedCube.front;
+      updateVertices('front', closedCube.front);
+      const leftVerts = closedCube.left.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
+      updateVertices('left', leftVerts);
+      const rightVerts = closedCube.right.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      updateVertices('right', rightVerts);
+      const backStep1 = closedCube.back.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const backVerts = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[2], angle));
+      updateVertices('back', backVerts);
+      const topStep3 = closedCube.top.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
+      const topVerts = topStep3.map(v => rotateAroundEdge(v, leftVerts[2], leftVerts[3], -angle));
+      updateVertices('top', topVerts);
+      const bottomVerts = closedCube.bottom.map(v => rotateAroundEdge(v, backVerts[0], backVerts[1], -angle));
+      updateVertices('bottom', bottomVerts);
+    }
+
+    function unfold1_4_1_E(t) {
+      const angle = t * 90;
+      updateVertices('bottom', closedCube.bottom);
+      const leftVerts = closedCube.left.map(v => rotZ(v, [-1,0,-1], angle));
+      updateVertices('left', leftVerts);
+      const rightVerts = closedCube.right.map(v => rotZ(v, [1,0,-1], -angle));
+      updateVertices('right', rightVerts);
+      const backStep1 = closedCube.back.map(v => rotZ(v, [1,0,-1], -angle));
+      const backVerts = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[2], -angle));
+      updateVertices('back', backVerts);
+      const frontVerts = closedCube.front.map(v => rotX(v, [-1,0,-1], -angle));
+      updateVertices('front', frontVerts);
+      const topVerts = closedCube.top.map(v => rotX(v, [-1,0,-1], -angle));
+      updateVertices('top', topVerts);
+    }
+
+    function unfold1_4_1_F(t) {
+      const angle = t * 90;
+      updateVertices('bottom', closedCube.bottom);
+      const leftVerts = closedCube.left.map(v => rotZ(v, [-1,0,-1], angle));
+      updateVertices('left', leftVerts);
+      const rightVerts = closedCube.right.map(v => rotZ(v, [1,0,-1], -angle));
+      updateVertices('right', rightVerts);
+      const backStep1 = closedCube.back.map(v => rotZ(v, [1,0,-1], -angle));
+      const backVerts = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[2], -angle));
+      updateVertices('back', backVerts);
+      const frontVerts = closedCube.front.map(v => rotX(v, [-1,0,-1], -angle));
+      updateVertices('front', frontVerts);
+      const topStep1 = closedCube.top.map(v => rotZ(v, [1,0,-1], -angle));
+      const topVerts = topStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      updateVertices('top', topVerts);
+    }
+
+    function unfold1_3_2_G(t) {
+      const angle = t * 90;
+      updateVertices('bottom', closedCube.bottom);
+      const leftVerts = closedCube.left.map(v => rotZ(v, [-1,0,-1], angle));
+      updateVertices('left', leftVerts);
+      const rightVerts = closedCube.right.map(v => rotZ(v, [1,0,-1], -angle));
+      updateVertices('right', rightVerts);
+      const frontStep1 = closedCube.front.map(v => rotZ(v, [-1,0,-1], angle));
+      const frontVerts = frontStep1.map(v => rotateAroundEdge(v, leftVerts[2], leftVerts[3], angle));
+      updateVertices('front', frontVerts);
+      const topStep1 = closedCube.top.map(v => rotZ(v, [1,0,-1], -angle));
+      const topVerts = topStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      updateVertices('top', topVerts);
+      const backStep1 = closedCube.back.map(v => rotZ(v, [1,0,-1], -angle));
+      const backStep2 = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      const backVerts = backStep2.map(v => rotateAroundEdge(v, topVerts[1], topVerts[2], -angle));
+      updateVertices('back', backVerts);
+    }
+
+    function unfold1_3_2_H(t) {
+      const angle = t * 90;
+      updateVertices('bottom', closedCube.bottom);
+      const leftVerts = closedCube.left.map(v => rotZ(v, [-1,0,-1], angle));
+      updateVertices('left', leftVerts);
+      const rightVerts = closedCube.right.map(v => rotZ(v, [1,0,-1], -angle));
+      updateVertices('right', rightVerts);
+      const frontVerts = closedCube.front.map(v => rotX(v, [-1,0,-1], -angle));
+      updateVertices('front', frontVerts);
+      const topStep1 = closedCube.top.map(v => rotZ(v, [1,0,-1], -angle));
+      const topVerts = topStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      updateVertices('top', topVerts);
+      const backStep1 = closedCube.back.map(v => rotZ(v, [1,0,-1], -angle));
+      const backStep2 = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      const backVerts = backStep2.map(v => rotateAroundEdge(v, topVerts[1], topVerts[2], -angle));
+      updateVertices('back', backVerts);
+    }
+
+    function unfold1_3_2_I(t) {
+      const angle = t * 90;
+      updateVertices('bottom', closedCube.bottom);
+      const leftVerts = closedCube.left.map(v => rotZ(v, [-1,0,-1], angle));
+      updateVertices('left', leftVerts);
+      const rightVerts = closedCube.right.map(v => rotZ(v, [1,0,-1], -angle));
+      updateVertices('right', rightVerts);
+      const frontStep1 = closedCube.front.map(v => rotZ(v, [1,0,-1], -angle));
+      const frontVerts = frontStep1.map(v => rotateAroundEdge(v, rightVerts[2], rightVerts[3], angle));
+      updateVertices('front', frontVerts);
+      const topStep1 = closedCube.top.map(v => rotZ(v, [1,0,-1], -angle));
+      const topVerts = topStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      updateVertices('top', topVerts);
+      const backStep1 = closedCube.back.map(v => rotZ(v, [1,0,-1], -angle));
+      const backStep2 = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      const backVerts = backStep2.map(v => rotateAroundEdge(v, topVerts[1], topVerts[2], -angle));
+      updateVertices('back', backVerts);
+    }
+
+    function unfold3_3_J(t) {
+      const angle = t * 90;
+      updateVertices('bottom', closedCube.bottom);
+      const rightVerts = closedCube.right.map(v => rotZ(v, [1,0,-1], angle));
+      updateVertices('right', rightVerts);
+      const backStep1 = closedCube.back.map(v => rotZ(v, [1,0,-1], angle));
+      const backVerts = backStep1.map(v => rotateAroundEdge(v, rightVerts[0], rightVerts[3], angle));
+      updateVertices('back', backVerts);
+      const frontVerts = closedCube.front.map(v => rotX(v, [1,0,-1], angle));
+      updateVertices('front', frontVerts);
+      const leftStep1 = closedCube.left.map(v => rotX(v, [1,0,-1], angle));
+      const leftVerts = leftStep1.map(v => rotateAroundEdge(v, frontVerts[1], frontVerts[2], angle));
+      updateVertices('left', leftVerts);
+      const topStep1 = closedCube.top.map(v => rotX(v, [1,0,-1], angle));
+      const topStep2 = topStep1.map(v => rotateAroundEdge(v, frontVerts[1], frontVerts[2], angle));
+      const topVerts = topStep2.map(v => rotateAroundEdge(v, leftVerts[1], leftVerts[2], angle));
+      updateVertices('top', topVerts);
+    }
+
+    function unfold2_2_2_K(t) {
+      const angle = t * 90;
+      updateVertices('bottom', closedCube.bottom);
+      const frontVerts = closedCube.front.map(v => rotX(v, [-1,0,-1], -angle));
+      updateVertices('front', frontVerts);
+      const leftStep1 = closedCube.left.map(v => rotX(v, [-1,0,-1], -angle));
+      const leftVerts = leftStep1.map(v => rotateAroundEdge(v, frontVerts[0], frontVerts[3], -angle));
+      updateVertices('left', leftVerts);
+      const rightVerts = closedCube.right.map(v => rotZ(v, [1,0,-1], -angle));
+      updateVertices('right', rightVerts);
+      const topStep1 = closedCube.top.map(v => rotZ(v, [1,0,-1], -angle));
+      const topVerts = topStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      updateVertices('top', topVerts);
+      const backStep1 = closedCube.back.map(v => rotZ(v, [1,0,-1], -angle));
+      const backStep2 = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      const backVerts = backStep2.map(v => rotateAroundEdge(v, topVerts[1], topVerts[2], -angle));
+      updateVertices('back', backVerts);
+    }
+
+    function setProgress(p) {
+      currentProgress = Math.max(0, Math.min(1, p));
+      const unfoldFunctions = [
+        unfold1_4_1_A,
+        unfold1_4_1_B,
+        unfold1_4_1_C,
+        unfold1_4_1_D,
+        unfold1_4_1_E,
+        unfold1_4_1_F,
+        unfold1_3_2_G,
+        unfold1_3_2_H,
+        unfold1_3_2_I,
+        unfold3_3_J,
+        unfold2_2_2_K
+      ];
+      unfoldFunctions[currentPattern](currentProgress);
+    }
+
+    function animateTo(target) {
+      const start = currentProgress;
+      const startTime = Date.now();
+      const dur = 1200;
+      const anim = () => {
+        const t = Math.min((Date.now() - startTime) / dur, 1);
+        const eased = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+        setProgress(start + (target - start) * eased);
+        if (t < 1) requestAnimationFrame(anim);
+      };
+      anim();
+    }
+
+    const patternNames = [
+      'A. 1-4-1型A (十字型)', 'B. 1-4-1型B (帯型1)', 'C. 1-4-1型C (L字型)',
+      'D. 1-4-1型D (L字変形1)', 'E. 1-4-1型E (T字型)', 'F. 1-4-1型F (帯型2)',
+      'G. 1-3-2型G (ジグザグ型)', 'H. 1-3-2型H (W字型)', 'I. 1-3-2型I (階段型)',
+      'J. 3-3型J (プロペラ型)', 'K. 2-2-2型K (階段型2)'
+    ];
+
+    layoutVRPanel();
+
+    const raycaster = new THREE.Raycaster();
+    const tempMatrix = new THREE.Matrix4();
+
+    function updateVRIntersections() {
+      if (!renderer.xr.isPresenting || !window.__controllers) return;
+      let newHover = null;
+      for (const c of window.__controllers) {
+        if (!c) continue;
+        tempMatrix.identity().extractRotation(c.matrixWorld);
+        raycaster.ray.origin.setFromMatrixPosition(c.matrixWorld);
+        raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+        const intersects = raycaster.intersectObjects(vrButtons, false);
+        if (intersects.length > 0) {
+          newHover = intersects[0].object;
+          if (c.userData.selecting && newHover.userData.onClick) {
+            newHover.userData.onClick();
+            c.userData.selecting = false;
+          }
+        }
+      }
+      if (vrHovered !== newHover) {
+        if (vrHovered) vrHovered.material.opacity = 1.0;
+        vrHovered = newHover;
+        if (vrHovered) vrHovered.material.opacity = 0.7;
+      }
+    }
+
+    function renderFrame() {
+      if (renderer.xr.isPresenting) updateVRIntersections();
+      renderer.render(scene, camera);
+    }
+    renderer.setAnimationLoop(renderFrame);
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+
+  <script type="module">
+    import { VRButton } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/webxr/VRButton.js';
+    import { XRControllerModelFactory } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/webxr/XRControllerModelFactory.js';
+
+    const THREE = window.THREE;
+    const renderer = window.renderer;
+
+    if (!renderer) {
+      console.error('[WebXR] renderer が見つかりません。');
+    } else {
+      renderer.xr.enabled = true;
+      document.body.appendChild(VRButton.createButton(renderer));
+
+      const factory = new XRControllerModelFactory();
+      window.__controllers = [];
+
+      const makeRay = (len = 3) => {
+        const geom = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(0, 0, -len)
+        ]);
+        const mat = new THREE.LineBasicMaterial({ linewidth: 2 });
+        const line = new THREE.Line(geom, mat);
+        line.frustumCulled = false;
+        line.userData.maxLen = len;
+        return line;
+      };
+
+      const makeCursor = () => {
+        const cursor = new THREE.Mesh(
+          new THREE.SphereGeometry(0.01, 16, 16),
+          new THREE.MeshBasicMaterial({})
+        );
+        cursor.visible = false;
+        return cursor;
+      };
+
+      for (let i = 0; i < 2; i++) {
+        const controller = renderer.xr.getController(i);
+        controller.addEventListener('selectstart', () => controller.userData.selecting = true);
+        controller.addEventListener('selectend',   () => controller.userData.selecting = false);
+
+        const ray = makeRay(3);
+        const cursor = makeCursor();
+        cursor.position.set(0, 0, -3);
+        controller.add(ray);
+        controller.add(cursor);
+        controller.userData.ray = ray;
+        controller.userData.cursor = cursor;
+        window.scene.add(controller);
+
+        const grip = renderer.xr.getControllerGrip(i);
+        grip.add(factory.createControllerModel(grip));
+        window.scene.add(grip);
+
+        window.__controllers[i] = controller;
+      }
+    }
+  </script>
+</body>
+</html>
