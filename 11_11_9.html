@@ -762,11 +762,22 @@
 
       for (let i = 0; i < 2; i++) {
         const controller = renderer.xr.getController(i);
-        controller.addEventListener('selectstart', () => controller.userData.selecting = true);
-        controller.addEventListener('selectend',   () => controller.userData.selecting = false);
+        controller.addEventListener('selectstart', () => {
+          controller.userData.selecting = true;
+          console.log(`Controller ${i} select start`);
+        });
+        controller.addEventListener('selectend', () => {
+          controller.userData.selecting = false;
+          console.log(`Controller ${i} select end`);
+        });
+        controller.addEventListener('connected', (e) => {
+          console.log(`Controller ${i} connected:`, e.data);
+        });
 
         const ray = makeRay(3);
+        ray.material.color.set(i === 0 ? 0xff0000 : 0x0000ff); // 左右を色分け
         const cursor = makeCursor();
+        cursor.material.color.set(0x00ff00);
         cursor.position.set(0, 0, -3);
         controller.add(ray);
         controller.add(cursor);
@@ -775,10 +786,12 @@
         window.scene.add(controller);
 
         const grip = renderer.xr.getControllerGrip(i);
-        grip.add(factory.createControllerModel(grip));
+        const model = factory.createControllerModel(grip);
+        grip.add(model);
         window.scene.add(grip);
 
         window.__controllers[i] = controller;
+        console.log(`Controller ${i} setup complete`);
       }
     }
   </script>
