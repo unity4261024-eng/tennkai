@@ -262,7 +262,7 @@
       panel.add(unfoldB, foldB, resetB);
 
       // パネルの位置（ユーザーから見て左手側）
-      panel.position.set(-1.4, 1.2, 0);
+      panel.position.set(-2.3, 1.2, 1);
       panel.rotation.y = 0.15;
       vrUIRoot.add(panel);
     }
@@ -707,8 +707,55 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
 
+    // --- Stick 読み取りユーティリティ（右手優先・自動ペア検出・デッドゾーン付き） ---
+    const STICK_DEADZONE = 0.2;     // 小さすぎる入力を無視
+    const YAW_SPEED   = 1.8;        // 左右回転（y回り）
+    const PITCH_SPEED = 1.0;        // 上下回転（x回り）
+
+    function _applyDeadzone(v, dz = STICK_DEADZONE) {
+      return Math.abs(v) < dz ? 0 : v;
+    }
+
+    // 使う inputSource を選ぶ（右手 > 左手 > 最初のやつ）
+    function _pickSource(session) {
+      if (!session) return null;
+      const arr = Array.from(session.inputSources || []);
+      const byRight = arr.find(s => s.handedness === 'right' && s.gamepad);
+      const byLeft  = arr.find(s => s.handedness === 'left'  && s.gamepad);
+      const any     = arr.find(s => s.gamepad);
+      return byRight || byLeft || any || null;
+    }
+
+    // 軸ペアを自動検出（(0,1) or (2,3) など、振れ幅が大きいペアを選ぶ）
+    function _readStickAxes(gamepad) {
+      if (!gamepad || !gamepad.axes || gamepad.axes.length < 2) return null;
+      const axes = gamepad.axes;
+
+      // 候補ペアを作る
+      const pairs = [];
+      for (let i = 0; i + 1 < axes.length; i += 2) {
+        pairs.push([axes[i], axes[i + 1]]);
+      }
+      // 最大振幅ペアを選択
+      let best = null, bestMag = -1;
+      for (const [x, y] of pairs) {
+        const mag = Math.abs(x) + Math.abs(y);
+        if (mag > bestMag) { bestMag = mag; best = [x, y]; }
+      }
+      if (!best) return null;
+
+      // デッドゾーン適用
+      let [sx, sy] = best;
+      sx = _applyDeadzone(sx);
+      sy = _applyDeadzone(sy);
+
+      return [sx, sy];
+    }
+
     // === カメラの周回 & レンダリング ===
     function renderFrame() {
+      const dt = __clock.getDelta();
+
       // VR中はヘッドセットの姿勢に任せ、カメラ座標は上書きしない
       if (!renderer.xr.isPresenting) {
         const r = camera.position.length();
@@ -719,7 +766,25 @@
         );
         camera.lookAt(0, 1, 0);
       } else {
-        updateVRIntersections();
+        updateVRIntersections && updateVRIntersections();
+
+        // === スティック入力で stage を回転 ===
+        const session = renderer.xr.getSession();
+        const src = _pickSource(session);
+
+        if (src && src.gamepad) {
+          const axes = _readStickAxes(src.gamepad);
+          if (axes) {
+            let [ax, ay] = axes;      // ax: 左右(-1..1), ay: 上下(-1..1)
+        // 端末ごとに向きが逆のことがあるので、必要なら符号を反転して好みに調整
+            cubeRoot.rotation.y -= ax * YAW_SPEED   * dt;  // 水平回転
+            cubeRoot.rotation.x -= ay * PITCH_SPEED * dt;  // 縦回転
+
+        // 見やすいように俯仰角を少し制限（任意）
+            const maxPitch = Math.PI / 3;
+            cubeRoot.rotation.x = Math.max(-maxPitch, Math.min(maxPitch, cubeRoot.rotation.x));
+          }
+        }
       }
       renderer.render(scene, camera);
     }

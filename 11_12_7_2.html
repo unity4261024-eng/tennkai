@@ -133,17 +133,17 @@
         <div class="pattern-section">
           <h3>📋 展開パターンを選択</h3>
           <div class="button-grid">
-            <button class="pattern-btn active" data-pattern="0">A. 1-4-1型A (十字型)</button>
-            <button class="pattern-btn" data-pattern="1">B. 1-4-1型B (帯型1)</button>
-            <button class="pattern-btn" data-pattern="2">C. 1-4-1型C (L字型)</button>
-            <button class="pattern-btn" data-pattern="3">D. 1-4-1型D (L字変形1)</button>
-            <button class="pattern-btn" data-pattern="4">E. 1-4-1型E (T字型)</button>
-            <button class="pattern-btn" data-pattern="5">F. 1-4-1型F (帯型2)</button>
-            <button class="pattern-btn" data-pattern="6">G. 1-3-2型G (ジグザグ型)</button>
-            <button class="pattern-btn" data-pattern="7">H. 1-3-2型H (W字型)</button>
-            <button class="pattern-btn" data-pattern="8">I. 1-3-2型I (階段型)</button>
-            <button class="pattern-btn" data-pattern="9">J. 3-3型J (プロペラ型)</button>
-            <button class="pattern-btn" data-pattern="10">K. 2-2-2型K (階段型2)</button>
+            <button class="pattern-btn active" data-pattern="0">A</button>
+            <button class="pattern-btn" data-pattern="1">B</button>
+            <button class="pattern-btn" data-pattern="2">C</button>
+            <button class="pattern-btn" data-pattern="3">D</button>
+            <button class="pattern-btn" data-pattern="4">E</button>
+            <button class="pattern-btn" data-pattern="5">F</button>
+            <button class="pattern-btn" data-pattern="6">G</button>
+            <button class="pattern-btn" data-pattern="7">H</button>
+            <button class="pattern-btn" data-pattern="8">I</button>
+            <button class="pattern-btn" data-pattern="9">J</button>
+            <button class="pattern-btn" data-pattern="10">K</button>
           </div>
         </div>
 
@@ -471,136 +471,169 @@
       const topStep3 = closedCube.top.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
       const topVerts = topStep3.map(v => rotateAroundEdge(v, leftVerts[2], leftVerts[3], -angle));
       updateVertices('top', topVerts);
-      const bottomVerts = closedCube.bottom.map(v => rotateAroundEdge(v, backVerts[0], backVerts[1], -angle));
+      // bottomに3段階の回転を適用:
+      // Step 1: rightと同じ回転（右の辺を軸に90度）
+      const bottomStep1 = closedCube.bottom.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+
+      // Step 2: backと同じ2回目の回転（rightの上辺を軸に90度）
+      const bottomStep2 = bottomStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[2], angle));
+
+      // Step 3: backの下辺から下に90度展開
+      const bottomVerts = bottomStep2.map(v => rotateAroundEdge(v, backVerts[0], backVerts[1], -angle));
       updateVertices('bottom', bottomVerts);
     }
 
     function unfold1_4_1_E(t) {
       const angle = t * 90;
-      updateVertices('bottom', closedCube.bottom);
-      const leftVerts = closedCube.left.map(v => rotZ(v, [-1,0,-1], angle));
+      updateVertices('front', closedCube.front);
+      const leftVerts = closedCube.left.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
       updateVertices('left', leftVerts);
-      const rightVerts = closedCube.right.map(v => rotZ(v, [1,0,-1], -angle));
+      const rightVerts = closedCube.right.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
       updateVertices('right', rightVerts);
-      const backStep1 = closedCube.back.map(v => rotZ(v, [1,0,-1], -angle));
-      const backVerts = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[2], -angle));
+      const backStep1 = closedCube.back.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const backVerts = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[2], angle));
       updateVertices('back', backVerts);
-      const frontVerts = closedCube.front.map(v => rotX(v, [-1,0,-1], -angle));
-      updateVertices('front', frontVerts);
-      const topVerts = closedCube.top.map(v => rotX(v, [-1,0,-1], -angle));
+      // topをleftの上辺から上に展開
+      const topStep1 = closedCube.top.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
+      const topVerts = topStep1.map(v => rotateAroundEdge(v, leftVerts[2], leftVerts[3], -angle));
       updateVertices('top', topVerts);
+      // bottomをleftの下辺から下に展開（回転方向を逆に）
+      const bottomStep1 = closedCube.bottom.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
+      const bottomVerts = bottomStep1.map(v => rotateAroundEdge(v, leftVerts[0], leftVerts[1], -angle));
+      updateVertices('bottom', bottomVerts);
     }
 
     function unfold1_4_1_F(t) {
       const angle = t * 90;
-      updateVertices('bottom', closedCube.bottom);
-      const leftVerts = closedCube.left.map(v => rotZ(v, [-1,0,-1], angle));
+      updateVertices('front', closedCube.front);
+      const leftVerts = closedCube.left.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
       updateVertices('left', leftVerts);
-      const rightVerts = closedCube.right.map(v => rotZ(v, [1,0,-1], -angle));
+      const rightVerts = closedCube.right.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
       updateVertices('right', rightVerts);
-      const backStep1 = closedCube.back.map(v => rotZ(v, [1,0,-1], -angle));
-      const backVerts = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[2], -angle));
+      const backStep1 = closedCube.back.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const backVerts = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[2], angle));
       updateVertices('back', backVerts);
-      const frontVerts = closedCube.front.map(v => rotX(v, [-1,0,-1], -angle));
-      updateVertices('front', frontVerts);
-      const topStep1 = closedCube.top.map(v => rotZ(v, [1,0,-1], -angle));
-      const topVerts = topStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      // topをfrontの上辺から上に展開
+      const topVerts = closedCube.top.map(v => rotateAroundEdge(v, [-1,2,-1], [1,2,-1], -angle));
       updateVertices('top', topVerts);
+      // bottomをrightの下辺から下に展開（回転方向を逆に）
+      const bottomStep1 = closedCube.bottom.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const bottomVerts = bottomStep1.map(v => rotateAroundEdge(v, rightVerts[0], rightVerts[1], angle));
+      updateVertices('bottom', bottomVerts);
     }
 
     function unfold1_3_2_G(t) {
       const angle = t * 90;
-      updateVertices('bottom', closedCube.bottom);
-      const leftVerts = closedCube.left.map(v => rotZ(v, [-1,0,-1], angle));
+      updateVertices('front', closedCube.front);
+      const leftVerts = closedCube.left.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
       updateVertices('left', leftVerts);
-      const rightVerts = closedCube.right.map(v => rotZ(v, [1,0,-1], -angle));
+      const rightVerts = closedCube.right.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
       updateVertices('right', rightVerts);
-      const frontStep1 = closedCube.front.map(v => rotZ(v, [-1,0,-1], angle));
-      const frontVerts = frontStep1.map(v => rotateAroundEdge(v, leftVerts[2], leftVerts[3], angle));
-      updateVertices('front', frontVerts);
-      const topStep1 = closedCube.top.map(v => rotZ(v, [1,0,-1], -angle));
-      const topVerts = topStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      // topをleftの上辺から上に展開
+      const topStep1 = closedCube.top.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
+      const topVerts = topStep1.map(v => rotateAroundEdge(v, leftVerts[2], leftVerts[3], -angle));
       updateVertices('top', topVerts);
-      const backStep1 = closedCube.back.map(v => rotZ(v, [1,0,-1], -angle));
-      const backStep2 = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
-      const backVerts = backStep2.map(v => rotateAroundEdge(v, topVerts[1], topVerts[2], -angle));
+      // bottomをrightの下辺から下に展開
+      const bottomStep1 = closedCube.bottom.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const bottomVerts = bottomStep1.map(v => rotateAroundEdge(v, rightVerts[0], rightVerts[1], angle));
+      updateVertices('bottom', bottomVerts);
+      // backをbottomの右辺から右に展開
+      const backStep1 = closedCube.back.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const backStep2 = backStep1.map(v => rotateAroundEdge(v, rightVerts[0], rightVerts[1], angle));
+      const backVerts = backStep2.map(v => rotateAroundEdge(v, bottomVerts[2], bottomVerts[3], -angle));
       updateVertices('back', backVerts);
     }
 
     function unfold1_3_2_H(t) {
       const angle = t * 90;
-      updateVertices('bottom', closedCube.bottom);
-      const leftVerts = closedCube.left.map(v => rotZ(v, [-1,0,-1], angle));
+      updateVertices('front', closedCube.front);
+      const leftVerts = closedCube.left.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
       updateVertices('left', leftVerts);
-      const rightVerts = closedCube.right.map(v => rotZ(v, [1,0,-1], -angle));
+      const rightVerts = closedCube.right.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
       updateVertices('right', rightVerts);
-      const frontVerts = closedCube.front.map(v => rotX(v, [-1,0,-1], -angle));
-      updateVertices('front', frontVerts);
-      const topStep1 = closedCube.top.map(v => rotZ(v, [1,0,-1], -angle));
-      const topVerts = topStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      const topVerts = closedCube.top.map(v => rotateAroundEdge(v, [-1,2,-1], [1,2,-1], -angle));
       updateVertices('top', topVerts);
-      const backStep1 = closedCube.back.map(v => rotZ(v, [1,0,-1], -angle));
-      const backStep2 = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
-      const backVerts = backStep2.map(v => rotateAroundEdge(v, topVerts[1], topVerts[2], -angle));
+      // bottomをrightの下辺から下に展開
+      const bottomStep1 = closedCube.bottom.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const bottomVerts = bottomStep1.map(v => rotateAroundEdge(v, rightVerts[0], rightVerts[1], angle));
+      updateVertices('bottom', bottomVerts);
+      // backをbottomの右辺から右に展開
+      const backStep1 = closedCube.back.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const backStep2 = backStep1.map(v => rotateAroundEdge(v, rightVerts[0], rightVerts[1], angle));
+      const backVerts = backStep2.map(v => rotateAroundEdge(v, bottomVerts[2], bottomVerts[3], -angle));
       updateVertices('back', backVerts);
     }
 
     function unfold1_3_2_I(t) {
       const angle = t * 90;
-      updateVertices('bottom', closedCube.bottom);
-      const leftVerts = closedCube.left.map(v => rotZ(v, [-1,0,-1], angle));
+      updateVertices('front', closedCube.front);
+      const leftVerts = closedCube.left.map(v => rotateAroundEdge(v, [-1,0,-1], [-1,2,-1], -angle));
       updateVertices('left', leftVerts);
-      const rightVerts = closedCube.right.map(v => rotZ(v, [1,0,-1], -angle));
+      const rightVerts = closedCube.right.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
       updateVertices('right', rightVerts);
-      const frontStep1 = closedCube.front.map(v => rotZ(v, [1,0,-1], -angle));
-      const frontVerts = frontStep1.map(v => rotateAroundEdge(v, rightVerts[2], rightVerts[3], angle));
-      updateVertices('front', frontVerts);
-      const topStep1 = closedCube.top.map(v => rotZ(v, [1,0,-1], -angle));
-      const topVerts = topStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      // topをrightの上辺から上に展開
+      const topStep1 = closedCube.top.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const topVerts = topStep1.map(v => rotateAroundEdge(v, rightVerts[2], rightVerts[3], angle));
       updateVertices('top', topVerts);
-      const backStep1 = closedCube.back.map(v => rotZ(v, [1,0,-1], -angle));
-      const backStep2 = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
-      const backVerts = backStep2.map(v => rotateAroundEdge(v, topVerts[1], topVerts[2], -angle));
+      // bottomをrightの下辺から下に展開
+      const bottomStep1 = closedCube.bottom.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const bottomVerts = bottomStep1.map(v => rotateAroundEdge(v, rightVerts[0], rightVerts[1], angle));
+      updateVertices('bottom', bottomVerts);
+      // backをbottomの右辺から右に展開
+      const backStep1 = closedCube.back.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const backStep2 = backStep1.map(v => rotateAroundEdge(v, rightVerts[0], rightVerts[1], angle));
+      const backVerts = backStep2.map(v => rotateAroundEdge(v, bottomVerts[2], bottomVerts[3], -angle));
       updateVertices('back', backVerts);
     }
 
     function unfold3_3_J(t) {
       const angle = t * 90;
-      updateVertices('bottom', closedCube.bottom);
-      const rightVerts = closedCube.right.map(v => rotZ(v, [1,0,-1], angle));
+      updateVertices('front', closedCube.front);
+      // rightをfrontの右辺から右に展開
+      const rightVerts = closedCube.right.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
       updateVertices('right', rightVerts);
-      const backStep1 = closedCube.back.map(v => rotZ(v, [1,0,-1], angle));
-      const backVerts = backStep1.map(v => rotateAroundEdge(v, rightVerts[0], rightVerts[3], angle));
+      // backをrightの右辺からさらに右に展開
+      const backStep1 = closedCube.back.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const backVerts = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[2], angle));
       updateVertices('back', backVerts);
-      const frontVerts = closedCube.front.map(v => rotX(v, [1,0,-1], angle));
-      updateVertices('front', frontVerts);
-      const leftStep1 = closedCube.left.map(v => rotX(v, [1,0,-1], angle));
-      const leftVerts = leftStep1.map(v => rotateAroundEdge(v, frontVerts[1], frontVerts[2], angle));
-      updateVertices('left', leftVerts);
-      const topStep1 = closedCube.top.map(v => rotX(v, [1,0,-1], angle));
-      const topStep2 = topStep1.map(v => rotateAroundEdge(v, frontVerts[1], frontVerts[2], angle));
-      const topVerts = topStep2.map(v => rotateAroundEdge(v, leftVerts[1], leftVerts[2], angle));
+      // topをfrontの上辺から上に展開
+      const topVerts = closedCube.top.map(v => rotateAroundEdge(v, [-1,2,-1], [1,2,-1], -angle));
       updateVertices('top', topVerts);
+      // leftをtopの左辺から左に展開
+      const leftStep1 = closedCube.left.map(v => rotateAroundEdge(v, [-1,2,-1], [1,2,-1], -angle));
+      const leftVerts = leftStep1.map(v => rotateAroundEdge(v, topVerts[3], topVerts[0], angle));
+      updateVertices('left', leftVerts);
+      // bottomはleftと同じ2段階の回転を適用してから、元々共有していた辺を軸に左に展開（回転方向を逆に）
+      const bottomStep1 = closedCube.bottom.map(v => rotateAroundEdge(v, [-1,2,-1], [1,2,-1], -angle));
+      const bottomStep2 = bottomStep1.map(v => rotateAroundEdge(v, topVerts[3], topVerts[0], angle));
+      const bottomVerts = bottomStep2.map(v => rotateAroundEdge(v, leftVerts[0], leftVerts[1], -angle));
+      updateVertices('bottom', bottomVerts);
     }
 
     function unfold2_2_2_K(t) {
       const angle = t * 90;
-      updateVertices('bottom', closedCube.bottom);
-      const frontVerts = closedCube.front.map(v => rotX(v, [-1,0,-1], -angle));
-      updateVertices('front', frontVerts);
-      const leftStep1 = closedCube.left.map(v => rotX(v, [-1,0,-1], -angle));
-      const leftVerts = leftStep1.map(v => rotateAroundEdge(v, frontVerts[0], frontVerts[3], -angle));
-      updateVertices('left', leftVerts);
-      const rightVerts = closedCube.right.map(v => rotZ(v, [1,0,-1], -angle));
-      updateVertices('right', rightVerts);
-      const topStep1 = closedCube.top.map(v => rotZ(v, [1,0,-1], -angle));
-      const topVerts = topStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
+      updateVertices('front', closedCube.front);
+      // topをfrontの上辺から上に展開
+      const topVerts = closedCube.top.map(v => rotateAroundEdge(v, [-1,2,-1], [1,2,-1], -angle));
       updateVertices('top', topVerts);
-      const backStep1 = closedCube.back.map(v => rotZ(v, [1,0,-1], -angle));
-      const backStep2 = backStep1.map(v => rotateAroundEdge(v, rightVerts[1], rightVerts[0], -angle));
-      const backVerts = backStep2.map(v => rotateAroundEdge(v, topVerts[1], topVerts[2], -angle));
+      // leftをtopの左辺から左に展開
+      const leftStep1 = closedCube.left.map(v => rotateAroundEdge(v, [-1,2,-1], [1,2,-1], -angle));
+      const leftVerts = leftStep1.map(v => rotateAroundEdge(v, topVerts[3], topVerts[0], angle));
+      updateVertices('left', leftVerts);
+      // rightをfrontの右辺から右に展開
+      const rightVerts = closedCube.right.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      updateVertices('right', rightVerts);
+      // bottomをrightの下辺から下に展開
+      const bottomStep1 = closedCube.bottom.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const bottomVerts = bottomStep1.map(v => rotateAroundEdge(v, rightVerts[0], rightVerts[1], angle));
+      updateVertices('bottom', bottomVerts);
+      // backをbottomの右辺から右に展開
+      const backStep1 = closedCube.back.map(v => rotateAroundEdge(v, [1,0,-1], [1,2,-1], angle));
+      const backStep2 = backStep1.map(v => rotateAroundEdge(v, rightVerts[0], rightVerts[1], angle));
+      const backVerts = backStep2.map(v => rotateAroundEdge(v, bottomVerts[2], bottomVerts[3], -angle));
       updateVertices('back', backVerts);
     }
+
 
     function setProgress(p) {
       currentProgress = p;
